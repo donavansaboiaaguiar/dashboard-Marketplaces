@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Análise de Pedidos · Margem por SKU</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@500;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js" onerror="var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';document.head.appendChild(s);"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<style>
+  :root{
+    --bg:#EAEEEC; --surface:#FFFFFF; --ink:#14201E; --muted:#5C6B68;
+    --line:#D7DEDB; --line-soft:#E8ECEA; --field:#F4F7F5;
+    --pos:#0F6E5C; --pos-soft:#E2F1ED; --neg:#C0392B; --neg-soft:#F8E7E4;
+    --warn:#B07A12; --warn-soft:#F6EEDC; --accent:#EE4D2D;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--ink);
+    -webkit-font-smoothing:antialiased;padding:22px;line-height:1.45}
+  .wrap{max-width:1240px;margin:0 auto}
+  .mono{font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}
+
+  header{margin-bottom:18px}
+  .eyebrow{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--muted);font-weight:700}
+  h1{font-family:'Hanken Grotesk',sans-serif;font-weight:800;font-size:27px;letter-spacing:-.02em;margin-top:6px}
+  h1 b{color:var(--accent)}
+  .sub{color:var(--muted);font-size:13.5px;margin-top:6px;max-width:70ch}
+
+  /* dropzone */
+  .drop{margin-top:18px;background:var(--surface);border:1.5px dashed var(--line);
+    border-radius:var(--radius);padding:26px;text-align:center;transition:.15s;cursor:pointer}
+  .drop.over{border-color:var(--pos);background:var(--pos-soft)}
+  .drop h2{font-family:'Hanken Grotesk',sans-serif;font-size:16px;font-weight:700}
+  .drop p{color:var(--muted);font-size:13px;margin-top:6px}
+  .drop .files{display:flex;gap:10px;justify-content:center;margin-top:14px;flex-wrap:wrap}
+  .pill{display:inline-flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;
+    font-size:12px;font-weight:700;padding:6px 11px;border-radius:20px;background:var(--field);color:var(--muted)}
+  .pill.ok{background:var(--pos-soft);color:var(--pos)}
+  .pill .dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+  .bar-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;
+    background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:11px 16px;margin-top:14px}
+  .bar-actions .left{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  button{font-family:'Inter';font-weight:600;font-size:13px;border:1px solid var(--line);
+    background:var(--surface);color:var(--ink);padding:8px 14px;border-radius:9px;cursor:pointer;transition:.15s}
+  button:hover{border-color:var(--pos);color:var(--pos)}
+  button.primary{background:var(--pos);color:#fff;border-color:var(--pos)}
+  button.primary:hover{background:#0c5a4b;color:#fff}
+
+  /* KPIs */
+  #kpis{display:flex;flex-direction:column;gap:16px;margin-top:18px}
+  .loja-titulo{font-family:'Hanken Grotesk',sans-serif;font-size:13.5px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+  .loja-titulo .lt-tot{font-family:'JetBrains Mono',monospace;font-weight:500;color:var(--muted);font-size:12px}
+  .loja-titulo.total{color:var(--pos)}
+  /* período + por mês */
+  .periodo-topo{font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--muted);margin-top:14px;padding:9px 14px;background:var(--field);border-radius:10px;display:inline-block}
+  .periodo-topo b{color:var(--ink)}
+  .chart-titulo{font-family:'Hanken Grotesk',sans-serif;font-size:13px;font-weight:700;margin-bottom:6px}
+  .chart-leg{display:flex;gap:14px;font-size:11px;color:var(--muted);margin-bottom:10px;flex-wrap:wrap}
+  .chart-leg .sw{width:10px;height:10px;border-radius:2px;display:inline-block;margin-right:4px;vertical-align:middle}
+  .chart-box{position:relative;width:100%;height:260px}
+  .kpirow{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
+  @media(max-width:920px){.kpirow{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:520px){.kpirow{grid-template-columns:repeat(2,1fr)}}
+  .kpi{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .kpi .lbl{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+  .kpi .val{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:21px;margin-top:5px;letter-spacing:-.02em}
+  .kpi .val.pos{color:var(--pos)} .kpi .val.neg{color:var(--neg)}
+  .kpi .small{font-size:11px;color:var(--muted);margin-top:2px}
+
+  .cols{display:grid;grid-template-columns:1.55fr 1fr;gap:16px;margin-top:16px;align-items:start}
+  @media(max-width:920px){.cols{grid-template-columns:1fr}}
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
+  .panel h3{font-family:'Hanken Grotesk',sans-serif;font-size:14px;font-weight:700;
+    display:flex;align-items:center;justify-content:space-between}
+  .panel h3 .hint{font-size:11px;color:var(--muted);font-weight:500}
+
+  /* ladder */
+  .ladder{margin-top:14px;display:flex;flex-direction:column;gap:9px}
+  .lrow{display:grid;grid-template-columns:130px 1fr 96px;gap:10px;align-items:center}
+  .lrow .nm{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lrow .nm small{color:var(--muted);font-weight:500;font-family:'JetBrains Mono',monospace}
+  .track{height:20px;background:var(--field);border-radius:6px;overflow:hidden;position:relative}
+  .fill{height:100%;border-radius:6px;transition:width .5s}
+  .lrow .mv{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:13px;text-align:right}
+  .scale{display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;
+    font-size:10px;color:var(--muted);margin-top:6px;padding-left:140px}
+
+  /* fees */
+  .feebar{height:26px;border-radius:7px;overflow:hidden;display:flex;margin-top:12px;border:1px solid var(--line-soft)}
+  .feebar span{height:100%}
+  .feeleg{display:flex;gap:14px;margin-top:10px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+  .feeleg b{color:var(--ink);font-family:'JetBrains Mono',monospace}
+  .sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:middle}
+
+  /* alerts */
+  .alert{margin-top:12px;border-radius:10px;padding:11px 13px;font-size:12.5px}
+  .alert.bad{background:var(--neg-soft)} .alert.warn{background:var(--warn-soft)} .alert.info{background:var(--field)}
+  .alert .at{font-weight:700;font-size:12px;display:flex;align-items:center;gap:7px;margin-bottom:6px}
+  .alert ul{list-style:none;font-family:'JetBrains Mono',monospace;font-size:11.5px;line-height:1.7}
+  .alert li{display:flex;justify-content:space-between;gap:8px}
+
+  /* table */
+  .tablewrap{margin-top:16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
+  .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+  input[type=search],input[type=number]{font-family:'Inter';font-size:13px;border:1px solid var(--line);
+    background:var(--field);border-radius:8px;padding:8px 11px;outline:none}
+  input:focus{border-color:var(--pos);background:#fff}
+  .tscroll{overflow:auto;max-height:460px;border:1px solid var(--line-soft);border-radius:10px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{position:sticky;top:0;background:var(--ink);color:#fff;font-family:'Hanken Grotesk';font-weight:600;
+    font-size:11px;text-align:right;padding:9px 10px;white-space:nowrap;cursor:pointer;user-select:none}
+  th:first-child,th.l{text-align:left}
+  td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line-soft);font-family:'JetBrains Mono',monospace}
+  td.l{text-align:left;font-family:'Inter';max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  tr:hover td{background:var(--field)}
+  .tag{font-family:'JetBrains Mono';font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px}
+  .tag.ok{background:var(--pos-soft);color:var(--pos)} .tag.lo{background:var(--warn-soft);color:var(--warn)}
+  .tag.pj{background:var(--neg-soft);color:var(--neg)} .tag.sc{background:var(--field);color:var(--muted)}
+  .pos{color:var(--pos)} .neg{color:var(--neg)}
+  .custos-bar{display:flex;gap:10px;align-items:center;margin-top:12px}
+  .splitwrap{display:flex;gap:28px;align-items:center;flex-wrap:wrap;margin-top:8px}
+  .split-total .big{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:32px;letter-spacing:-.02em;line-height:1.1}
+  .split-total .lbl2{font-size:12px;color:var(--muted)}
+  .splitbars{flex:1;min-width:300px;display:flex;flex-direction:column;gap:9px}
+  .ljrow{display:grid;grid-template-columns:150px 1fr;gap:12px;align-items:center}
+  .ljhead{display:flex;flex-direction:column;font-size:12px;color:var(--muted);line-height:1.25}
+  .ljhead .ljn{font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px}
+  .ljhead b{font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--ink)}
+  .track2{height:30px;border-radius:8px;overflow:hidden;display:flex;border:1px solid var(--line-soft)}
+  .track2 .seg{height:100%;display:flex;align-items:center;justify-content:center;color:#fff;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700}
+  .splitlegend{display:flex;gap:22px;margin-top:10px;flex-wrap:wrap}
+  .splitlegend .it{display:flex;flex-direction:column;font-size:12px;color:var(--muted)}
+  .splitlegend .it b{font-family:'JetBrains Mono',monospace;font-size:15px;color:var(--ink);margin:1px 0}
+  .splitnote{margin-top:14px;font-size:13px;color:var(--muted);background:var(--field);border-radius:10px;padding:12px 14px;line-height:1.55}
+  .splitnote b{color:var(--ink)}
+  .addrow{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center}
+  .addrow input,.addrow select{font-family:'Inter';font-size:13px;border:1px solid var(--line);background:var(--field);border-radius:8px;padding:7px 10px;outline:none}
+  #cu-tbody input,#cu-tbody select{font-family:'JetBrains Mono';font-size:12px;border:1px solid var(--line-soft);background:#fff;border-radius:6px;padding:4px 6px;outline:none;width:100%}
+  #cu-tbody td{padding:5px 8px}
+  .cu-del{padding:3px 8px;font-size:12px;color:var(--neg);border-color:var(--line-soft)}
+  .hidden{display:none}
+  .err{color:var(--neg);font-size:13px;margin-top:10px}
+  footer{margin-top:22px;font-size:11px;color:var(--muted);text-align:center;font-family:'JetBrains Mono',monospace}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Tok Home · análise de vendas</div>
+    <h1>Margem real por <b>SKU</b> e por pedido</h1>
+    <p class="sub">Exporte os pedidos no Seller Center (Meus Pedidos → Exportar) e solte o arquivo aqui junto com seu mestre de custos (principais). O painel calcula a renda real e a margem de cada produto — sem instalar nada.</p>
+  </header>
+
+  <div id="drop" class="drop">
+    <h2>Solte aqui os relatórios de vendas</h2>
+    <p>Shopee (Order_…xlsx) e/ou Mercado Livre (relatório de cobranças). Pode soltar vários — de lojas e plataformas diferentes — que ele soma tudo. Os custos já vêm cadastrados.</p>
+    <div class="files" id="files">
+      <span class="pill" id="pill-ord"><span class="dot"></span>Pedidos: aguardando</span>
+    </div>
+    <input type="file" id="file" accept=".xlsx,.xls" multiple class="hidden">
+    <div class="err hidden" id="err"></div>
+  </div>
+
+  <div class="custos-bar">
+    <span class="pill ok" id="custos-pill"><span class="dot"></span>Custos: — cadastrados</span>
+    <button id="btn-custos">Gerenciar custos</button>
+  </div>
+
+  <div id="custos-panel" class="panel hidden" style="margin-top:14px">
+    <h3>Custos cadastrados (principais) <span class="hint" id="custos-count"></span></h3>
+    <div class="toolbar">
+      <input type="search" id="custos-search" placeholder="Buscar SKU ou nome…" style="min-width:230px">
+      <button id="cu-save" class="primary" style="margin-left:auto">Salvar</button>
+      <button id="cu-export">Baixar custos (Excel)</button>
+      <button id="cu-restore">Restaurar padrão</button>
+    </div>
+    <div class="addrow">
+      <input id="add-sku" placeholder="SKU" style="width:120px">
+      <input id="add-nome" placeholder="Nome do produto" style="flex:1;min-width:160px">
+      <select id="add-tipo"><option>Variante</option><option>Principal</option><option>PNC</option></select>
+      <input id="add-custo" type="number" step="0.01" placeholder="Custo R$" style="width:100px">
+      <button id="cu-add" class="primary">Adicionar</button>
+    </div>
+    <div class="tscroll" style="max-height:340px"><table id="cu-tbl">
+      <thead><tr><th class="l">SKU</th><th class="l">Nome</th><th class="l">Tipo</th><th>Custo (R$)</th><th></th></tr></thead>
+      <tbody id="cu-tbody"></tbody>
+    </table></div>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px">As alterações ficam salvas neste navegador. Use "Baixar custos" pra guardar um backup ou levar pra outro computador.</div>
+  </div>
+
+  <div id="dash" class="hidden">
+    <div class="bar-actions">
+      <div class="left">
+        <span class="pill ok" id="bar-ord"></span>
+        <span class="pill ok" id="bar-cus"></span>
+      </div>
+      <div>
+        <button id="btn-export" class="primary">Baixar Excel</button>
+        <button id="btn-reset">Trocar arquivos</button>
+      </div>
+    </div>
+
+    <div id="periodo-topo" class="periodo-topo"></div>
+
+    <div class="panel" id="split-panel" style="margin-top:16px">
+      <h3>Vendas do período <span class="hint">geral · concluído + em aberto</span></h3>
+      <div class="splitwrap" id="splitwrap"></div>
+      <div class="splitnote" id="splitnote"></div>
+    </div>
+
+    <div id="kpis"></div>
+
+    <div class="cols">
+      <div class="panel">
+        <h3>Escada de margem por produto <span class="hint">por SKU principal · ordenado pela margem</span></h3>
+        <div class="ladder" id="ladder"></div>
+        <div class="scale"><span>0%</span><span>15%</span><span>30%</span><span>45%+</span></div>
+      </div>
+      <div>
+        <div class="panel">
+          <h3>Para onde vai a receita</h3>
+          <div class="feebar" id="feebar"></div>
+          <div class="feeleg" id="feeleg"></div>
+        </div>
+        <div class="panel" style="margin-top:16px">
+          <h3>Alertas <span class="hint">o que sangra margem</span></h3>
+          <div id="alerts"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tablewrap">
+      <div class="toolbar">
+        <strong style="font-family:'Hanken Grotesk';font-size:14px">Vendas por pedido</strong>
+        <input type="search" id="search" placeholder="Buscar SKU ou produto…" style="margin-left:auto;min-width:230px">
+        <label style="font-size:12px;color:var(--muted)">Margem alvo
+          <input type="number" id="alvo" value="15" min="0" step="1" style="width:62px"> %</label>
+      </div>
+      <div class="tscroll">
+        <table id="tbl">
+          <thead><tr>
+            <th class="l" data-k="pedido">Pedido</th>
+            <th class="l" data-k="data">Data</th>
+            <th class="l" data-k="sku">SKU</th>
+            <th class="l" data-k="sku_prin">Principal</th>
+            <th class="l" data-k="produto">Produto</th>
+            <th data-k="unidades">Un</th>
+            <th data-k="receita">Receita</th>
+            <th data-k="taxas">Taxas</th>
+            <th data-k="renda">Renda</th>
+            <th data-k="custo">Custo</th>
+            <th data-k="lucro">Lucro</th>
+            <th data-k="margem">Margem</th>
+            <th class="l" data-k="grupo">Situação</th>
+            <th class="l" data-k="status">Custo?</th>
+          </tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="pormes" style="margin-top:24px">
+      <div class="loja-titulo total" style="font-size:15px;margin-bottom:14px">Por mês</div>
+      <div class="tablewrap" style="margin-top:0">
+        <strong style="font-family:'Hanken Grotesk';font-size:13px">Resumo dos meses</strong>
+        <div class="tscroll" style="margin-top:10px;max-height:none">
+          <table id="pormes-tbl"></table>
+        </div>
+      </div>
+      <div class="tablewrap" style="margin-top:16px">
+        <div class="chart-titulo">Vendas e lucro por mês</div>
+        <div class="chart-leg"><span><span class="sw" style="background:#2a78d6"></span>Vendas</span><span><span class="sw" style="background:#1baf7a"></span>Lucro</span></div>
+        <div class="chart-box"><canvas id="g1"></canvas></div>
+
+        <div class="chart-titulo" style="margin-top:26px">Margem por mês</div>
+        <div class="chart-box" style="height:230px"><canvas id="g2"></canvas></div>
+
+        <div class="chart-titulo" style="margin-top:26px">Para onde foi a receita (cada mês)</div>
+        <div class="chart-leg"><span><span class="sw" style="background:#e34948"></span>Taxas</span><span><span class="sw" style="background:#888780"></span>Custo do produto</span><span><span class="sw" style="background:#1baf7a"></span>Lucro</span></div>
+        <div class="chart-box" style="height:280px"><canvas id="g3"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>Cálculo local no seu navegador · nada é enviado para servidores</footer>
+</div>
+
+<script>
+const BRL = v => (v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const PCT = v => (v*100).toLocaleString('pt-BR',{maximumFractionDigits:1})+'%';
+const $ = id => document.getElementById(id);
+
+// ---------- normalização / parsing ----------
+const norm = s => (s==null?'':s.toString()).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9 ]/g,' ');
+const normSku = s => (s==null?'':s.toString()).replace(/\s+/g,'').toUpperCase();
+function parseCusto(x){
+  if(x==null) return 0;
+  if(typeof x==='number') return x;
+  let s=x.toString().replace('R$','').replace(/\s/g,'');
+  s = (s.includes(',')&&s.includes('.')) ? s.replace(/\./g,'').replace(',','.') : s.replace(',','.');
+  const v=parseFloat(s); return isNaN(v)?0:v;
+}
+function packDaVariacao(v){
+  const s=norm(v);
+  let m=s.match(/(\d+)\s*(unidades?|un|esponjas?|pc|pecas?|kit)\b/); if(m) return parseInt(m[1]);
+  let m2=s.match(/quantidade\D*(\d+)/); if(m2) return parseInt(m2[1]);
+  return 1;
+}
+
+// ---------- detecção e leitura dos 2 arquivos ----------
+let ORDERS=null, CUSTOS={}, NOMEIDX=[], ORD_FILES=[];
+const CUSTOS_PADRAO=[{"s": "962", "t": "Variante", "c": 11.0, "n": "Cortina Box Banheiro C/ Visor Transp Antimofo PVC C/ Ganchos Cor:Branco"}, {"s": "963", "t": "Variante", "c": 11.0, "n": "Cortina Box Banheiro C/ Visor Transp Antimofo PVC C/ Ganchos Cor:Cinza"}, {"s": "1164", "t": "Variante", "c": 11.0, "n": "Cortina Box Banheiro C/ Visor Transp Antimofo PVC C/ Ganchos Cor:Bege"}, {"s": "1167", "t": "Variante", "c": 11.0, "n": "Cortina Box Banheiro C/ Visor Transp Antimofo PVC C/ Ganchos Cor:Preto"}, {"s": "ASS0005", "t": "Variante", "c": 16.76, "n": "Assento Sanitário Almofadado C/ Tampa Oval Universal Cor:Branco"}, {"s": "Ass002Cinza", "t": "Variante", "c": 18.69, "n": "Assento Sanitário Almofadado C/ Tampa Oval Universal Cor:Marmore Cinza"}, {"s": "ASS002Preto", "t": "Variante", "c": 18.69, "n": "Assento Sanitário Almofadado C/ Tampa Oval Universal Cor:Marmore Preto"}, {"s": "Ass002Salmão", "t": "Variante", "c": 18.69, "n": "Assento Sanitário Almofadado C/ Tampa Oval Universal Cor:Marmore Salmão"}, {"s": "Ass006", "t": "Variante", "c": 23.0, "n": "Assento Sanitário Almofadado C/ Tampa Oval Universal Cor:Preto"}, {"s": "Ass007", "t": "Variante", "c": 23.0, "n": "Assento Sanitário Almofadado C/ Tampa Oval Universal Cor:Cinza"}, {"s": "BAL002", "t": "Principal", "c": 26.0, "n": "Balança Digital Forma Coração Alta Precisão 3k Dieta Fitness"}, {"s": "BAM025", "t": "PNC", "c": 8.0, "n": "Jogo Porta Copos Redondos Bambu Ecológico Linha Premium"}, {"s": "BAM036", "t": "Principal", "c": 19.0, "n": "Bandeja Retangular de Bambu Alça Café da Manhã e Decoração"}, {"s": "BAM043-1", "t": "Variante", "c": 43.0, "n": "Kit Conjuto Acessórios P/ Banheiro Lavabo Luxo 5 Peças Bambu Cor:Preto"}, {"s": "BAM043-2", "t": "Variante", "c": 43.0, "n": "Kit Conjuto Acessórios P/ Banheiro Lavabo Luxo 5 Peças Bambu Cor:Cinza"}, {"s": "BAM043-3", "t": "Variante", "c": 43.0, "n": "Kit Conjuto Acessórios P/ Banheiro Lavabo Luxo 5 Peças Bambu Cor:Branco"}, {"s": "BLA022", "t": "Principal", "c": 57.0, "n": "Escorredor Organizador De Louças Inox Com Alça em Bambu"}, {"s": "CAAP0003-1", "t": "Variante", "c": 20.0, "n": "Capa Máquina de Lavar Impermeável C/ Zíper Todos Marcas Tamanho:G;Cor:Bege - Com Ziper"}, {"s": "CAAP0003-10", "t": "Variante", "c": 15.0, "n": "Capa Máquina de Lavar Impermeável C/ Zíper Todos Marcas Tamanho:G;Cor:Preto - Sem Ziper"}, {"s": "CAAP0003-11", "t": "Variante", "c": 15.0, "n": "Capa Máquina de Lavar Impermeável C/ Zíper Todos Marcas Tamanho:M;Cor:Bege - Sem Ziper"}, {"s": "CAAP0003-12", "t": "Variante", "c": 20.0, "n": "Capa Máquina de Lavar Impermeável C/ Zíper Todos Marcas Tamanho:M;Cor:Branco - Com Ziper"}, {"s": "CAAP0003-13", "t": "Variante", "c": 15.0, "n": "Capa Máquina de Lavar Impermeável C/ Zíper Todos Marcas Tamanho:M;Cor:Branco - Sem Ziper"}, {"s": "CAAP0003-14", "t": "Variante", "c": 20.0, "n": "Capa Máquina de Lavar Impermeável C/ Zíper Todos Marcas Tamanho:M;Cor:Cinza - Com Ziper"}, {"s": "CAAP0003-15", "t": "Variante", "c": 15.0, "n": "Capa Máquina de Lavar Impermeável C/ Zíper Todos Marcas Tamanho:M;Cor:Cinza - Sem Ziper"}, {"s": "CAAP0003-16", "t": "Variante", "c": 20.0, "n": "Capa Máquina de Lavar Impermeável C/ Zíper Todos Marcas Tamanho:M;Cor:Preto - Com Ziper"}, {"s": "CAAP0003-17", "t": "Variante", "c": 15.0, "n": "Capa Máquina de Lavar Impermeável C/ Zíper Todos Marcas Tamanho:M;Cor:Preto - Sem Ziper"}, {"s": "CAAP0003-18", "t": "Variante", "c": 15.0, "n": "Capa Máquina de Lavar Impermeável C/ Zíper Todos Marcas Tamanho:P;Cor:Bege - Sem Ziper"}, {"s": "CAAP0003-19", "t": "Variante", "c": 20.0, "n": "Capa Máquina de Lavar Impermeável C/ Zíper Todos Marcas Tamanho:P;Cor:Branco - Com Ziper"}, {"s": "CAAP0003-2", "t": "Variante", "c": 20.0, "n": "Capa Máquina de Lavar Impermeável C/ Zíper Todos Marcas Tamanho:P;Cor:Bege - Com Ziper"}, {"s": "CAAP0003-20", "t": "Variante", "c": 15.0, "n": "Capa Máquina de Lavar Impermeável C/ Zíper Todos Marcas Tamanho:P;Cor:Branco - Sem Ziper"}, {"s": "CAAP0003-21", "t": "Variante", "c": 20.0, "n": "Capa Máquina de Lavar Impermeável C/ Zíper Todos Marcas Tamanho:P;Cor:Cinza - Com Ziper"}, {"s": "CAAP0003-22", "t": "Variante", "c": 15.0, "n": "Capa Máquina de Lavar Impermeável C/ Zíper Todos Marcas Tamanho:P;Cor:Cinza - Sem Ziper"}, {"s": "CAAP0003-23", "t": "Variante", "c": 20.0, "n": "Capa Máquina de Lavar Impermeável C/ Zíper Todos Marcas Tamanho:P;Cor:Preto - Com Ziper"}, {"s": "CAAP0003-24", "t": "Variante", "c": 15.0, "n": "Capa Máquina de Lavar Impermeável C/ Zíper Todos Marcas Tamanho:P;Cor:Preto - Sem Ziper"}, {"s": "CAAP0003-3", "t": "Variante", "c": 15.0, "n": "Capa Máquina de Lavar Impermeável C/ Zíper Todos Marcas Tamanho:G;Cor:Bege - Sem Ziper"}, {"s": "CAAP0003-4", "t": "Variante", "c": 20.0, "n": "Capa Máquina de Lavar Impermeável C/ Zíper Todos Marcas Tamanho:G;Cor:Branco - Com Ziper"}, {"s": "CAAP0003-5", "t": "Variante", "c": 20.0, "n": "Capa Máquina de Lavar Impermeável C/ Zíper Todos Marcas Tamanho:M;Cor:Bege - Com Ziper"}, {"s": "CAAP0003-6", "t": "Variante", "c": 15.0, "n": "Capa Máquina de Lavar Impermeável C/ Zíper Todos Marcas Tamanho:G;Cor:Branco - Sem Ziper"}, {"s": "CAAP0003-7", "t": "Variante", "c": 20.0, "n": "Capa Máquina de Lavar Impermeável C/ Zíper Todos Marcas Tamanho:G;Cor:Cinza - Com Ziper"}, {"s": "CAAP0003-8", "t": "Variante", "c": 15.0, "n": "Capa Máquina de Lavar Impermeável C/ Zíper Todos Marcas Tamanho:G;Cor:Cinza - Sem Ziper"}, {"s": "CAAP0003-9", "t": "Variante", "c": 20.0, "n": "Capa Máquina de Lavar Impermeável C/ Zíper Todos Marcas Tamanho:G;Cor:Preto - Com Ziper"}, {"s": "CAB007", "t": "Variante", "c": 7.5, "n": "Cabides De Madeira Premium Marfim Para Roupas Calça Gancho Cromado e Giratório"}, {"s": "CAN003-1", "t": "Variante", "c": 30.11, "n": "Mine Liquidificador USB Portátil 6 Lâmina c/ Canudo e Trava Cor:Azul"}, {"s": "CAN003-2", "t": "Variante", "c": 30.11, "n": "Mine Liquidificador USB Portátil 6 Lâmina c/ Canudo e Trava Cor:Rosa"}, {"s": "CAN003-3", "t": "Variante", "c": 30.11, "n": "Mine Liquidificador USB Portátil 6 Lâmina c/ Canudo e Trava Cor:Verde"}, {"s": "Cap001B", "t": "Variante", "c": 8.0, "n": "Capa de Almofada Suede Premium Canelada Aveludada 45x45 (Produto pai) Cor:Branco"}, {"s": "Cap001R", "t": "Variante", "c": 8.0, "n": "Capa de Almofada Suede Premium Canelada Aveludada 45x45 (Produto pai) Cor:Rosa"}, {"s": "CAP002-1", "t": "Variante", "c": 10.58, "n": "Capa de Almofada Aveludada Luxo Suede Toque Macio 42 x 42 Cor:Cinza"}, {"s": "CAP002-2", "t": "Variante", "c": 10.58, "n": "Capa de Almofada Aveludada Luxo Suede Toque Macio 42 x 42 Cor:Marrom"}, {"s": "CAP002-3", "t": "Variante", "c": 10.58, "n": "Capa de Almofada Aveludada Luxo Suede Toque Macio 42 x 42 Cor:Preto"}, {"s": "CAP002-4", "t": "Variante", "c": 10.58, "n": "Capa de Almofada Aveludada Luxo Suede Toque Macio 42 x 42 Cor:Nude"}, {"s": "CAP002-5", "t": "Variante", "c": 10.58, "n": "Capa de Almofada Aveludada Luxo Suede Toque Macio 42 x 42 Cor:Branco"}, {"s": "CAP002-6", "t": "Variante", "c": 10.58, "n": "Capa de Almofada Aveludada Luxo Suede Toque Macio 42 x 42 Cor:Rosa"}, {"s": "Cap002C", "t": "Variante", "c": 8.0, "n": "Capa de Almofada Suede Premium Canelada Aveludada 45x45 (Produto pai) Cor:Cinza"}, {"s": "Cap002N", "t": "Variante", "c": 8.0, "n": "Capa de Almofada Suede Premium Canelada Aveludada 45x45 (Produto pai) Cor:Nude"}, {"s": "Cap002P", "t": "Variante", "c": 8.0, "n": "Capa de Almofada Suede Premium Canelada Aveludada 45x45 (Produto pai) Cor:Preto"}, {"s": "Cap002V", "t": "Variante", "c": 4.0, "n": "Capa de Almofada Suede Premium Canelada Aveludada 45x45 (Produto pai) Cor:Vermelho"}, {"s": "Cap003A", "t": "Variante", "c": 4.0, "n": "Capa de Almofada Ziper Invisivel Sala Quarto Premium 45x45 Cor:Amarelo"}, {"s": "Cap003B", "t": "Variante", "c": 4.0, "n": "Capa de Almofada Ziper Invisivel Sala Quarto Premium 45x45 Cor:Bege"}, {"s": "Cap003C", "t": "Variante", "c": 4.0, "n": "Capa de Almofada Ziper Invisivel Sala Quarto Premium 45x45 Cor:Cinza"}, {"s": "Cap003M", "t": "Variante", "c": 4.0, "n": "Capa de Almofada Ziper Invisivel Sala Quarto Premium 45x45 Cor:Marrom"}, {"s": "Cap003MC", "t": "Variante", "c": 4.0, "n": "Capa de Almofada Ziper Invisivel Sala Quarto Premium 45x45 Cor:Marrom Claro"}, {"s": "Cap003ME", "t": "Variante", "c": 4.0, "n": "Capa de Almofada Ziper Invisivel Sala Quarto Premium 45x45 Cor:Marrom Escuro"}, {"s": "Cap003P", "t": "Variante", "c": 4.0, "n": "Capa de Almofada Ziper Invisivel Sala Quarto Premium 45x45 Cor:Pistache"}, {"s": "Cap003V", "t": "Variante", "c": 4.0, "n": "Capa de Almofada Ziper Invisivel Sala Quarto Premium 45x45 Cor:Vermelha"}, {"s": "CAP0152-A", "t": "Variante", "c": 10.58, "n": "Capa de Almofada Suede Aveludada Com Zíper Luxo 45x45cm Cor:Azul"}, {"s": "CAP0152-B", "t": "Variante", "c": 10.58, "n": "Capa de Almofada Suede Aveludada Com Zíper Luxo 45x45cm Cor:Branco"}, {"s": "CAP0152-CC", "t": "Variante", "c": 10.58, "n": "Capa de Almofada Suede Aveludada Com Zíper Luxo 45x45cm Cor:Cinza Claro"}, {"s": "CAP0152-CE", "t": "Variante", "c": 10.58, "n": "Capa de Almofada Suede Aveludada Com Zíper Luxo 45x45cm Cor:Cinza Escuro"}, {"s": "CAP0152-V", "t": "Variante", "c": 10.58, "n": "Capa de Almofada Suede Aveludada Com Zíper Luxo 45x45cm Cor:Verde"}, {"s": "Cor0003", "t": "Principal", "c": 0.5, "n": "Kit Caneta Marcadora De Cabeça Dupla Oleosa Montagem Artística 12 a 80 Cores Unitário"}, {"s": "Cor0044B", "t": "Variante", "c": 4.0, "n": "Livro de colorir Capa Dura Desenho Pintura Acabamento de Luxo 50 folhas"}, {"s": "CortvinilBG", "t": "Variante", "c": 11.0, "n": "Cortina Box de Banheiro Antimofo Impermeável C/ Ganchos Cor:Bege"}, {"s": "CortvinilBR", "t": "Variante", "c": 11.0, "n": "Cortina Box de Banheiro Antimofo Impermeável C/ Ganchos Cor:Branco"}, {"s": "CortvinilCZ", "t": "Variante", "c": 11.0, "n": "Cortina Box de Banheiro Antimofo Impermeável C/ Ganchos Cor:Cinza"}, {"s": "CortvinilMR", "t": "Variante", "c": 11.0, "n": "Cortina Box de Banheiro Antimofo Impermeável C/ Ganchos Cor:Marrom"}, {"s": "CortvinilPT", "t": "Variante", "c": 11.0, "n": "Cortina Box de Banheiro Antimofo Impermeável C/ Ganchos Cor:Preto"}, {"s": "COZ061", "t": "Principal", "c": 3.94, "n": "Espremedor Amassador Triturador de Alho Temperos Inox Manual"}, {"s": "COZ064", "t": "Principal", "c": 6.0, "n": "Bomba Manual Galão Garrafão 10/20 Litros Água Mineral"}, {"s": "COZ067-1", "t": "Variante", "c": 15.12, "n": "Porta Tempero Condimentos 4 Potes Com Etiquetas e Suporte Cor:Preto"}, {"s": "COZ067-2", "t": "Variante", "c": 15.12, "n": "Porta Tempero Condimentos 4 Potes Com Etiquetas e Suporte Cor:Cromado"}, {"s": "COZ083", "t": "Principal", "c": 3.5, "n": "Afiador Amolador de Facas e Tesoura Profissional 3 em 1 (Prod. Pai)"}, {"s": "COZ084", "t": "PNC", "c": 19.86, "n": "Organizador Porta Ovos Suporte de 30 Ovos Grandes 4 Andares Cozinha Dispenser Mesa e Geladeira"}, {"s": "COZ300", "t": "Principal", "c": 5.06, "n": "Kit 10un Saco Alimentos Com Zipe Armazenar no Freezer 26x32"}, {"s": "DIS013B", "t": "Variante", "c": 29.0, "n": "Kit Banheiro Lavabo 3pçs Dispenser Sabonete Porta Escovas Cor:Branco"}, {"s": "DIS013P", "t": "Variante", "c": 29.0, "n": "Kit Banheiro Lavabo 3pçs Dispenser Sabonete Porta Escovas Cor:Preto"}, {"s": "ESC001", "t": "Principal", "c": 13.0, "n": "Escova De Vaso Sanitário De Inox Com Base Para Banheiro"}, {"s": "ESP008D", "t": "Variante", "c": 20.0, "n": "Espelho Redondo Adnet Decorativo com Alça em Couro  32cm Cor da Moldura:Dourado"}, {"s": "ESP008M", "t": "Variante", "c": 20.0, "n": "Espelho Redondo Adnet Decorativo com Alça em Couro  32cm Cor da Moldura:Marrom"}, {"s": "ESP008P", "t": "Variante", "c": 20.0, "n": "Espelho Redondo Adnet Decorativo com Alça em Couro  32cm Cor da Moldura:Preto"}, {"s": "ESP009D", "t": "Variante", "c": 30.0, "n": "Espelho Redondo Adnet Decorativo com Alça em Couro 45cm Cor da Moldura:Dourado"}, {"s": "ESP009M", "t": "Variante", "c": 30.0, "n": "Espelho Redondo Adnet Decorativo com Alça em Couro 45cm Cor da Moldura:Marrom"}, {"s": "ESP009P", "t": "Variante", "c": 30.0, "n": "Espelho Redondo Adnet Decorativo com Alça em Couro 45cm Cor da Moldura:Preto"}, {"s": "ESP021", "t": "Principal", "c": 65.0, "n": "Espelho Redondo LED C/ Alça em Couro 45cm Banheiro Sala"}, {"s": "LIM0046", "t": "PNC", "c": 0.95, "n": "Esponjas Mágica Limpa Forno Panelas Manchas Pesadas"}, {"s": "LIM010", "t": "Principal", "c": 6.24, "n": "Kit 9 Panos Microfibra Multiuso Alta Absorção Grande 30x30"}, {"s": "LIM020-1", "t": "Variante", "c": 33.42, "n": "kit Balde Mop Giratório 360 Centrífuga Inox C/ 2 Esfregões Cor:Branco"}, {"s": "LIM020-2", "t": "Variante", "c": 33.42, "n": "kit Balde Mop Giratório 360 Centrífuga Inox C/ 2 Esfregões Cor:Vermelho"}, {"s": "LIM027", "t": "Principal", "c": 3.53, "n": "Kit Rolo Rolinho Tira Pelos Fiapos e Cabelos Roupa + 2 Refis"}, {"s": "LIM030P", "t": "Variante", "c": 12.0, "n": "Kit 4 Sacos Protetor Lavar Roupa Com Zíper P M G GG Pronta Entrega Tamanho:P"}, {"s": "LIM031M", "t": "Variante", "c": 12.0, "n": "Kit 4 Sacos Protetor Lavar Roupa Com Zíper P M G GG Pronta Entrega Tamanho:M"}, {"s": "LIM032G", "t": "Variante", "c": 12.0, "n": "Kit 4 Sacos Protetor Lavar Roupa Com Zíper P M G GG Pronta Entrega Tamanho:G"}, {"s": "LIM033GG", "t": "Variante", "c": 12.0, "n": "Kit 4 Sacos Protetor Lavar Roupa Com Zíper P M G GG Pronta Entrega Tamanho:GG"}, {"s": "LIM034-1", "t": "Variante", "c": 27.31, "n": "Kit Mop Sprar Giratório Esfregão 360 Vassoura Mágica Cor:Branco"}, {"s": "LIM034-2", "t": "Variante", "c": 27.31, "n": "Kit Mop Sprar Giratório Esfregão 360 Vassoura Mágica Cor:Vermelho"}, {"s": "LIM047R", "t": "PNC", "c": 1.5, "n": "Kit Esponja Bucha Mágica Melamina Branca Tira Mancha Desengordura Limpeza Pesada"}, {"s": "LIM048", "t": "Principal", "c": 7.9, "n": "Defletor Direcionador Ar Condicionado Universal Ajustável"}, {"s": "LIX003", "t": "Variante", "c": 25.0, "n": "Lixo Lixeira Inox 3L 5L 12L Tampa e Pedal Cesto Removivel Lixeira:Lixeira 3L"}, {"s": "LIX005", "t": "Variante", "c": 32.0, "n": "Lixo Lixeira Inox 3L 5L 12L Tampa e Pedal Cesto Removivel Lixeira:Lixeira 5L"}, {"s": "LIX007", "t": "Variante", "c": 58.0, "n": "Lixo Lixeira Inox 3L 5L 12L Tampa e Pedal Cesto Removivel Lixeira:Lixeira 12L"}, {"s": "LUM012-1", "t": "Variante", "c": 78.0, "n": "Luminária Abaju de Mesa Retrátil Com Base Madeira 37cm Cor:Preto"}, {"s": "LUM012-2", "t": "Variante", "c": 78.0, "n": "Luminária Abaju de Mesa Retrátil Com Base Madeira 37cm Cor:Cinza"}, {"s": "LUM012-3", "t": "Variante", "c": 78.0, "n": "Luminária Abaju de Mesa Retrátil Com Base Madeira 37cm Cor:Branco"}, {"s": "LUM013-1", "t": "Variante", "c": 52.4, "n": "Abaju Luminária de Mesa Aramado Retrô Bola Cúpula Luxo Cor:Preto"}, {"s": "LUM013-2", "t": "Variante", "c": 52.4, "n": "Abaju Luminária de Mesa Aramado Retrô Bola Cúpula Luxo Cor:Cinza"}, {"s": "MAN002-1", "t": "Variante", "c": 13.0, "n": "Manta Para Sofá Gigante 150x210 Tipo Capa Sofá 100% Algodão Cor:Azul Escuro"}, {"s": "MAN002-10", "t": "Variante", "c": 13.0, "n": "Manta Para Sofá Gigante 150x210 Tipo Capa Sofá 100% Algodão Cor:Preto"}, {"s": "MAN002-11", "t": "Variante", "c": 13.0, "n": "Manta Para Sofá Gigante 150x210 Tipo Capa Sofá 100% Algodão Cor:Marrom com Cinza"}, {"s": "MAN002-12", "t": "Variante", "c": 13.0, "n": "Manta Para Sofá Gigante 150x210 Tipo Capa Sofá 100% Algodão Cor:Preto com Branco"}, {"s": "MAN002-13", "t": "Variante", "c": 13.0, "n": "Manta Para Sofá Gigante 150x210 Tipo Capa Sofá 100% Algodão Cor:Marrom"}, {"s": "MAN002-2", "t": "Variante", "c": 13.0, "n": "Manta Para Sofá Gigante 150x210 Tipo Capa Sofá 100% Algodão Cor:Azul Claro"}, {"s": "MAN002-3", "t": "Variante", "c": 13.0, "n": "Manta Para Sofá Gigante 150x210 Tipo Capa Sofá 100% Algodão Cor:Bege"}, {"s": "MAN002-4", "t": "Variante", "c": 13.0, "n": "Manta Para Sofá Gigante 150x210 Tipo Capa Sofá 100% Algodão Cor:Marrom Com Branco"}, {"s": "MAN002-5", "t": "Variante", "c": 13.0, "n": "Manta Para Sofá Gigante 150x210 Tipo Capa Sofá 100% Algodão Cor:Amarelo"}, {"s": "MAN002-6", "t": "Variante", "c": 13.0, "n": "Manta Para Sofá Gigante 150x210 Tipo Capa Sofá 100% Algodão Cor:Cinza Escuro"}, {"s": "MAN002-7", "t": "Variante", "c": 13.0, "n": "Manta Para Sofá Gigante 150x210 Tipo Capa Sofá 100% Algodão Cor:Branco"}, {"s": "MAN002-8", "t": "Variante", "c": 13.0, "n": "Manta Para Sofá Gigante 150x210 Tipo Capa Sofá 100% Algodão Cor:Cinza"}, {"s": "MAN002-9", "t": "Variante", "c": 13.0, "n": "Manta Para Sofá Gigante 150x210 Tipo Capa Sofá 100% Algodão Cor:Verde Escuro"}, {"s": "Man004", "t": "Variante", "c": 21.0, "n": "Manta Para Sofá Luxo 100% Algodão Gigante Direto da Fabrica Cor:Vermelha C/ Branco"}, {"s": "MAN005", "t": "Variante", "c": 21.0, "n": "Manta Para Sofá Luxo 100% Algodão Gigante Direto da Fabrica Cor:Branco C/ Marrom Claro"}, {"s": "Man006", "t": "Variante", "c": 21.0, "n": "Manta Para Sofá Luxo 100% Algodão Gigante Direto da Fabrica Cor:Branco c/ Marrom Escuro"}, {"s": "MAN008", "t": "Variante", "c": 21.0, "n": "Manta Para Sofá Luxo 100% Algodão Gigante Direto da Fabrica Cor: Azul Escuro C/ Marrom"}, {"s": "Man010", "t": "Variante", "c": 21.0, "n": "Manta Para Sofá Luxo 100% Algodão Gigante Direto da Fabrica Cor:Cinza c/ Branco"}, {"s": "Mes0055", "t": "Variante", "c": 41.46, "n": "Mesa de Apoio Lateral Para Sofá Cama Organizadora Madeira Cor:Oval Marrom Claro"}, {"s": "MES012-1", "t": "Variante", "c": 7.27, "n": "Kit Com 6 Forros Multiuso P/ Geladeira Mesa E Armários 43x29 Cor:Branco"}, {"s": "MES012-2", "t": "Variante", "c": 7.27, "n": "Kit Com 6 Forros Multiuso P/ Geladeira Mesa E Armários 43x29 Cor:Vermelho"}, {"s": "MES012-3", "t": "Variante", "c": 7.27, "n": "Kit Com 6 Forros Multiuso P/ Geladeira Mesa E Armários 43x29 Cor:Cinza"}, {"s": "MES012-4", "t": "Variante", "c": 7.27, "n": "Kit Com 6 Forros Multiuso P/ Geladeira Mesa E Armários 43x29 Cor:Marrom"}, {"s": "MES012-5", "t": "Variante", "c": 7.27, "n": "Kit Com 6 Forros Multiuso P/ Geladeira Mesa E Armários 43x29 Cor:Taupe"}, {"s": "MES016-1", "t": "Variante", "c": 15.3, "n": "Mesa Suporte Dobrável Para Notebook Portátil Multiuso Luxo Cor:Rosa"}, {"s": "MES016-2", "t": "Variante", "c": 15.3, "n": "Mesa Suporte Dobrável Para Notebook Portátil Multiuso Luxo Cor:Azul"}, {"s": "MES016-3", "t": "Variante", "c": 15.3, "n": "Mesa Suporte Dobrável Para Notebook Portátil Multiuso Luxo Cor:Marrom"}, {"s": "MES016-4", "t": "Variante", "c": 15.3, "n": "Mesa Suporte Dobrável Para Notebook Portátil Multiuso Luxo Cor:Preto"}, {"s": "MES021-2", "t": "Variante", "c": 3.0, "n": "Kit 4 ou 6 Jogo Americano Souplast Redondo Jantar Mesa Posta Cozinha 38cm (Produto Pai) Cor:Vermelho"}, {"s": "MES021-3", "t": "Variante", "c": 3.0, "n": "Kit 4 ou 6 Jogo Americano Souplast Redondo Jantar Mesa Posta Cozinha 38cm (Produto Pai) Cor:Preto"}, {"s": "MES021-4", "t": "Variante", "c": 3.0, "n": "Kit 4 ou 6 Jogo Americano Souplast Redondo Jantar Mesa Posta Cozinha 38cm (Produto Pai) Cor:Verde"}, {"s": "MES021-5", "t": "Variante", "c": 3.0, "n": "Kit 4 ou 6 Jogo Americano Souplast Redondo Jantar Mesa Posta Cozinha 38cm (Produto Pai) Cor:Azul"}, {"s": "MES021-6", "t": "Variante", "c": 3.0, "n": "Kit 4 ou 6 Jogo Americano Souplast Redondo Jantar Mesa Posta Cozinha 38cm (Produto Pai) Cor:Bege"}, {"s": "MES021-7", "t": "Variante", "c": 3.0, "n": "Kit 4 ou 6 Jogo Americano Souplast Redondo Jantar Mesa Posta Cozinha 38cm (Produto Pai) Cor:Marrom"}, {"s": "MES055M", "t": "Variante", "c": 41.46, "n": "Mesa de Apoio Lateral Para Sofá Cama Organizadora Madeira Cor: Redonda Marrom Escuro"}, {"s": "MES055O", "t": "Variante", "c": 41.46, "n": "Mesa de Apoio Lateral Para Sofá Cama Organizadora Madeira Cor:Oval Marrom Escuro"}, {"s": "MES055P", "t": "Variante", "c": 41.46, "n": "Mesa de Apoio Lateral Para Sofá Cama Organizadora Madeira Cor: Redonda Marrom Claro"}, {"s": "OORG056", "t": "Principal", "c": 0.0, "n": "Prateleira Multiuso Rodinha 360° Premium Metal e Plástico 4 Andares"}, {"s": "ORG041", "t": "Principal", "c": 5.24, "n": "Kit Com 4 Tapetes Multiuso Forros Para Geladeira  Armários"}, {"s": "ORG055-1", "t": "Variante", "c": 25.39, "n": "Organizador Prateleira Multiuso 2 Andares Banheiro Cozinha Cor:Preto"}, {"s": "ORG055-2", "t": "Variante", "c": 25.39, "n": "Organizador Prateleira Multiuso 2 Andares Banheiro Cozinha Cor:Transparente"}, {"s": "ORG056", "t": "Principal", "c": 57.0, "n": "Prateleira Multiuso Rodinha 360° Premium Metal e Plástico 3 Andares"}, {"s": "ORG077", "t": "Principal", "c": 37.0, "n": "Organizador Arara Rack Sapateiro Roupas Dupla C/ Rodinhas"}, {"s": "ORG080-1", "t": "Variante", "c": 2.2, "n": "Suporte Porta Objetos 2 em 1 Sem Furar p/ Celular Controles Cor:Preto"}, {"s": "ORG080-2", "t": "Variante", "c": 2.2, "n": "Suporte Porta Objetos 2 em 1 Sem Furar p/ Celular Controles Cor:Branco"}, {"s": "ORG099", "t": "Principal", "c": 108.59, "n": "Estante Escada para Livros C/ 4 Prateleiras Madeira e Metal"}, {"s": "PAN010-1", "t": "Variante", "c": 130.0, "n": "kit Jogo de Panela 4 Peças Antiaderente Tampa de Vidro Luxo Cor:Bege"}, {"s": "PAN010-2", "t": "Variante", "c": 130.0, "n": "kit Jogo de Panela 4 Peças Antiaderente Tampa de Vidro Luxo Cor:Preto"}, {"s": "PAN010-3", "t": "Variante", "c": 130.0, "n": "kit Jogo de Panela 4 Peças Antiaderente Tampa de Vidro Luxo Cor:Vermelho"}, {"s": "PAN035-1", "t": "Variante", "c": 283.92, "n": "Kit Jogo de Panela 7 peças Antiaderente Tampa de Vidro Luxo Cor:Preto"}, {"s": "PAN035-2", "t": "Variante", "c": 283.92, "n": "Kit Jogo de Panela 7 peças Antiaderente Tampa de Vidro Luxo Cor:Vermelho"}, {"s": "PAN035-3", "t": "Variante", "c": 283.92, "n": "Kit Jogo de Panela 7 peças Antiaderente Tampa de Vidro Luxo Cor:Bege"}, {"s": "PAN037", "t": "Variante", "c": 190.0, "n": "Jogo De Panelas Indução Antiaderente Kit 4 Peças  Puro Luxo Cor:Branco"}, {"s": "Pan047", "t": "Variante", "c": 48.0, "n": "Frigideira Indução Panquequeira Tapioqueira Antiaderente 22cmTeflon"}, {"s": "PAN052", "t": "Variante", "c": 190.0, "n": "Jogo De Panelas Indução Antiaderente Kit 4 Peças  Puro Luxo Cor:Cinza"}, {"s": "PAN053", "t": "Variante", "c": 190.0, "n": "Jogo De Panelas Indução Antiaderente Kit 4 Peças  Puro Luxo Cor:Vermelho"}, {"s": "Pan054", "t": "Variante", "c": 200.0, "n": "Jogo De Panelas Indução Antiaderente Kit 4 Pçs Cerâmica Luxo Cor:Grafite"}, {"s": "Pan055", "t": "Variante", "c": 200.0, "n": "Jogo De Panelas Indução Antiaderente Kit 4 Pçs Cerâmica Luxo Cor:Preto"}, {"s": "PAN056", "t": "Variante", "c": 155.0, "n": "Jogo De Panelas Indução Antiaderente Kit 5 Pçs Cerâmica Luxo Cor:Preto"}, {"s": "PAN057", "t": "Variante", "c": 155.0, "n": "Jogo De Panelas Indução Antiaderente Kit 5 Pçs Cerâmica Luxo Cor:Cinza"}, {"s": "PAN058", "t": "Variante", "c": 155.0, "n": "Jogo De Panelas Indução Antiaderente Kit 5 Pçs Cerâmica Luxo Cor:Bege"}, {"s": "PAN059", "t": "Variante", "c": 28.27, "n": "Frigideira Indução Antiaderente Cerâmica Cabo Térmico Tamanhos/Cor:20Cm-Bege"}, {"s": "PAN061", "t": "Variante", "c": 28.27, "n": "Frigideira Indução Antiaderente Cerâmica Cabo Térmico Tamanhos/Cor:20Cm-Cinza"}, {"s": "PAN062", "t": "Variante", "c": 28.27, "n": "Frigideira Indução Antiaderente Cerâmica Cabo Térmico Tamanhos/Cor:20Cm-Vemelho"}, {"s": "PAN063", "t": "Variante", "c": 34.11, "n": "Frigideira Indução Antiaderente Cerâmica Cabo Térmico Tamanhos/Cor:24Cm-Bege"}, {"s": "PAN064", "t": "Variante", "c": 34.11, "n": "Frigideira Indução Antiaderente Cerâmica Cabo Térmico Tamanhos/Cor:24Cm-Cinza"}, {"s": "PAN065", "t": "Variante", "c": 34.11, "n": "Frigideira Indução Antiaderente Cerâmica Cabo Térmico Tamanhos/Cor:24Cm-Vermelho"}, {"s": "PAN066", "t": "Variante", "c": 38.99, "n": "Frigideira Indução Antiaderente Cerâmica Cabo Térmico Tamanhos/Cor:28Cm-Bege"}, {"s": "PAN067", "t": "Variante", "c": 38.99, "n": "Frigideira Indução Antiaderente Cerâmica Cabo Térmico Tamanhos/Cor:28Cm-Cinza"}, {"s": "PAN068", "t": "Variante", "c": 38.99, "n": "Frigideira Indução Antiaderente Cerâmica Cabo Térmico Tamanhos/Cor:28Cm-Vermelho"}, {"s": "Pan069", "t": "Variante", "c": 48.73, "n": "Frigideira Wok Indução Antiaderente 28cm Profissional Cor:Bege"}, {"s": "PAN070", "t": "Variante", "c": 48.73, "n": "Frigideira Wok Indução Antiaderente 28cm Profissional Cor:Cinza"}, {"s": "Pan071", "t": "Variante", "c": 48.73, "n": "Frigideira Wok Indução Antiaderente 28cm Profissional Cor:Vermelho"}, {"s": "PAP001-1", "t": "Variante", "c": 8.14, "n": "Papel de Parede Adesivo Autocolante 3D Premium 5 Metro X45CM Cor: MADEIRA NATURAL"}, {"s": "PAP001-2", "t": "Variante", "c": 8.14, "n": "Papel de Parede Adesivo Autocolante 3D Premium 5 Metro X45CM Cor: MADEIRA ESCURA"}, {"s": "PAP001-3", "t": "Variante", "c": 8.14, "n": "Papel de Parede Adesivo Autocolante 3D Premium 5 Metro X45CM Cor: MADEIRA VERMELHA"}, {"s": "PAP001-4", "t": "Variante", "c": 8.14, "n": "Papel de Parede Adesivo Autocolante 3D Premium 5 Metro X45CM Cor: MADEIRA LARANJA"}, {"s": "PAP002-1", "t": "Variante", "c": 8.14, "n": "Papel de Parede Adesivo Autocolante 3D Premium 5M Madeira Cor: Cinza"}, {"s": "PAP002-2", "t": "Variante", "c": 8.14, "n": "Papel de Parede Adesivo Autocolante 3D Premium 5M Madeira Cor: Cinza Claro"}, {"s": "PAP002-3", "t": "Variante", "c": 8.14, "n": "Papel de Parede Adesivo Autocolante 3D Premium 5M Madeira Cor: MADERIA NATURAL"}, {"s": "PAP002-4", "t": "Variante", "c": 8.14, "n": "Papel de Parede Adesivo Autocolante 3D Premium 5M Madeira Cor: MADEIRA ESCURA"}, {"s": "PAP011-1", "t": "Variante", "c": 8.14, "n": "Papel de Parede Adesivo Autocolante 3D Premium 5 Metro X45CM Cor: Tijolo Vinho"}, {"s": "PAP011-2", "t": "Variante", "c": 8.14, "n": "Papel de Parede Adesivo Autocolante 3D Premium 5 Metro X45CM Cor: Tijolo Cinza"}, {"s": "PAP011-3", "t": "Variante", "c": 8.14, "n": "Papel de Parede Adesivo Autocolante 3D Premium 5 Metro X45CM Cor: Tijolo Cinza Escuro"}, {"s": "PAP011-4", "t": "Variante", "c": 8.14, "n": "Papel de Parede Adesivo Autocolante 3D Premium 5 Metro X45CM Cor: Tijolo Marrom"}, {"s": "PAP014-1", "t": "Variante", "c": 8.14, "n": "Papel de Parede Adesivo Autocolante 3D Premium 5 Metro X45CM Cor: Listrado com Laranja"}, {"s": "PAP014-2", "t": "Variante", "c": 8.14, "n": "Papel de Parede Adesivo Autocolante 3D Premium 5 Metro X45CM Cor: Listras Cinza"}, {"s": "PAP014-3", "t": "Variante", "c": 8.14, "n": "Papel de Parede Adesivo Autocolante 3D Premium 5 Metro X45CM Cor: Listras Cinza com Rosa"}, {"s": "PAP014-4", "t": "Variante", "c": 8.14, "n": "Papel de Parede Adesivo Autocolante 3D Premium 5 Metro X45CM Cor: Listras Cinza com Bege"}, {"s": "POT025", "t": "Principal", "c": 29.24, "n": "Kit 3 Potes Vidro Retangular 4 Travas"}, {"s": "POT049-1", "t": "Variante", "c": 17.7, "n": "Dispenser Porta Organizador P/ Alimentos Cereais de Parede Cor:Preto"}, {"s": "POT049-2", "t": "Variante", "c": 17.7, "n": "Dispenser Porta Organizador P/ Alimentos Cereais de Parede Cor:Branco"}, {"s": "TAP0014", "t": "Variante", "c": 13.0, "n": "Tapete Para Banheiro 3 Peças ou 2 Peças Antiderrapante Luxo Cor:Kit Com 2 Tapetes Nudes"}, {"s": "TAP0019", "t": "Variante", "c": 13.0, "n": "Tapete Para Banheiro 3 Peças ou 2 Peças Antiderrapante Luxo Cor:Kit Com 2 Tapetes V.Musgo"}, {"s": "TAP0020", "t": "Variante", "c": 13.0, "n": "Tapete Para Banheiro 3 Peças ou 2 Peças Antiderrapante Luxo Cor:Kit Com 2 Tapetes Roxo"}, {"s": "TAP013", "t": "Variante", "c": 13.0, "n": "Tapete Para Banheiro 3 Peças ou 2 Peças Antiderrapante Luxo Cor: Kit Com 2 Tapetes Preto"}, {"s": "TAP0131", "t": "Variante", "c": 13.0, "n": "Tapete Para Banheiro 3 Peças ou 2 Peças Antiderrapante Luxo Cor: Kit Com 2 Tapetes Vermelho"}, {"s": "TAP0132", "t": "Variante", "c": 13.0, "n": "Tapete Para Banheiro 3 Peças ou 2 Peças Antiderrapante Luxo Cor:Kit Com 2 Tapetes Rosa"}, {"s": "TAP0133", "t": "Variante", "c": 13.0, "n": "Tapete Para Banheiro 3 Peças ou 2 Peças Antiderrapante Luxo Cor:Kit Com 2 Tapetes Azul Escuro"}, {"s": "TAP0134", "t": "Variante", "c": 13.0, "n": "Tapete Para Banheiro 3 Peças ou 2 Peças Antiderrapante Luxo Cor:Kit Com 2 Tapetes Cinza"}, {"s": "TAP0135", "t": "Variante", "c": 13.0, "n": "Tapete Para Banheiro 3 Peças ou 2 Peças Antiderrapante Luxo Cor:Kit Com 2 Tapetes Verde Água"}, {"s": "TAP0136", "t": "Variante", "c": 13.0, "n": "Tapete Para Banheiro 3 Peças ou 2 Peças Antiderrapante Luxo Cor:Kit Com 2Tapetes Marrom"}, {"s": "TAP026-1", "t": "Variante", "c": 8.5, "n": "Tapete Decoração Peludo Macio fácil de lavar 38x58cm Luxo Cor:Preto"}, {"s": "TAP026-2", "t": "Variante", "c": 8.5, "n": "Tapete Decoração Peludo Macio fácil de lavar 38x58cm Luxo Cor:Rosa"}, {"s": "TAP026-3", "t": "Variante", "c": 8.5, "n": "Tapete Decoração Peludo Macio fácil de lavar 38x58cm Luxo Cor:Vermelho"}, {"s": "TAP026-4", "t": "Variante", "c": 8.5, "n": "Tapete Decoração Peludo Macio fácil de lavar 38x58cm Luxo Cor:Azul escuro"}, {"s": "TAP026-5", "t": "Variante", "c": 8.5, "n": "Tapete Decoração Peludo Macio fácil de lavar 38x58cm Luxo Cor:Cinza"}, {"s": "TAP026-6", "t": "Variante", "c": 8.5, "n": "Tapete Decoração Peludo Macio fácil de lavar 38x58cm Luxo Cor:Verde Agua"}, {"s": "TAP026-7", "t": "Variante", "c": 8.5, "n": "Tapete Decoração Peludo Macio fácil de lavar 38x58cm Luxo Cor:Marrom"}, {"s": "TAP027-01", "t": "Variante", "c": 8.68, "n": "Tapede Decoração Peludo Macio fácil de lavar 38x58cm Luxo Cor: Preto"}, {"s": "TAP027-02", "t": "Variante", "c": 8.68, "n": "Tapede Decoração Peludo Macio fácil de lavar 38x58cm Luxo Cor: Rosa"}, {"s": "TAP027-03", "t": "Variante", "c": 8.68, "n": "Tapede Decoração Peludo Macio fácil de lavar 38x58cm Luxo Cor: Vermelho"}, {"s": "TAP027-04", "t": "Variante", "c": 8.68, "n": "Tapede Decoração Peludo Macio fácil de lavar 38x58cm Luxo Cor: Azul Escuro"}, {"s": "TAP027-05", "t": "Variante", "c": 8.68, "n": "Tapede Decoração Peludo Macio fácil de lavar 38x58cm Luxo Cor: Cinza"}, {"s": "TAP027-06", "t": "Variante", "c": 8.68, "n": "Tapede Decoração Peludo Macio fácil de lavar 38x58cm Luxo Cor: Verde"}, {"s": "Tap034AC", "t": "Variante", "c": 4.5, "n": "Tapete Capacho Porta de Entrada 40x60 Antiderrapante Cor:Azul Claro"}, {"s": "Tap034AE", "t": "Variante", "c": 4.5, "n": "Tapete Capacho Porta de Entrada 40x60 Antiderrapante Cor:Azul Escuro"}, {"s": "Tap034B", "t": "Variante", "c": 4.5, "n": "Tapete Capacho Porta de Entrada 40x60 Antiderrapante Cor:Bege"}, {"s": "Tap034C", "t": "Variante", "c": 4.5, "n": "Tapete Capacho Porta de Entrada 40x60 Antiderrapante Cor:Cinza"}, {"s": "Tap034M", "t": "Variante", "c": 4.5, "n": "Tapete Capacho Porta de Entrada 40x60 Antiderrapante Cor:Marrom"}, {"s": "Tap034P", "t": "Variante", "c": 4.5, "n": "Tapete Capacho Porta de Entrada 40x60 Antiderrapante Cor:Preto"}, {"s": "Tap034V", "t": "Variante", "c": 4.5, "n": "Tapete Capacho Porta de Entrada 40x60 Antiderrapante Cor:Verde"}, {"s": "Tap034Ve", "t": "Variante", "c": 4.5, "n": "Tapete Capacho Porta de Entrada 40x60 Antiderrapante Cor:Vermelho"}, {"s": "TAP052-1", "t": "Variante", "c": 19.86, "n": "Tapete Passedeira Para Cozinha Com Antiderrapante 40x100 Cor:Cinza"}, {"s": "TAP052-10", "t": "Variante", "c": 19.86, "n": "Tapete Passedeira Para Cozinha Com Antiderrapante 40x100 Cor:Nudes"}, {"s": "TAP052-11", "t": "Variante", "c": 19.86, "n": "Tapete Passedeira Para Cozinha Com Antiderrapante 40x100 Cor:Rosa Choque"}, {"s": "TAP052-12", "t": "Variante", "c": 19.86, "n": "Tapete Passedeira Para Cozinha Com Antiderrapante 40x100 Cor:Verde Escuro"}, {"s": "TAP052-2", "t": "Variante", "c": 19.86, "n": "Tapete Passedeira Para Cozinha Com Antiderrapante 40x100 Cor:Vermelho"}, {"s": "TAP052-3", "t": "Variante", "c": 19.86, "n": "Tapete Passedeira Para Cozinha Com Antiderrapante 40x100 Cor:Verde"}, {"s": "TAP052-4", "t": "Variante", "c": 19.86, "n": "Tapete Passedeira Para Cozinha Com Antiderrapante 40x100 Cor:Azul"}, {"s": "TAP052-5", "t": "Variante", "c": 19.86, "n": "Tapete Passedeira Para Cozinha Com Antiderrapante 40x100 Cor:Marrom"}, {"s": "TAP052-6", "t": "Variante", "c": 19.86, "n": "Tapete Passedeira Para Cozinha Com Antiderrapante 40x100 Cor:Rosa"}, {"s": "TAP052-7", "t": "Variante", "c": 19.86, "n": "Tapete Passedeira Para Cozinha Com Antiderrapante 40x100 Cor:Preto"}, {"s": "TAP052-8", "t": "Variante", "c": 19.86, "n": "Tapete Passedeira Para Cozinha Com Antiderrapante 40x100 Cor:Branco"}, {"s": "TAP052-9", "t": "Variante", "c": 19.86, "n": "Tapete Passedeira Para Cozinha Com Antiderrapante 40x100 Cor:Cinza Chumbo"}, {"s": "TAP0561", "t": "Variante", "c": 22.0, "n": "Tapete Para Banheiro 3 Peças ou 2 Peças Antiderrapante Luxo Cor:Kit Com 3 Tapetes Preto"}, {"s": "TAP0562", "t": "Variante", "c": 13.0, "n": "Tapete Para Banheiro 3 Peças ou 2 Peças Antiderrapante Luxo Cor: Kit Com 3 Tapetes Vermelho"}, {"s": "TAP0563", "t": "Variante", "c": 22.0, "n": "Tapete Para Banheiro 3 Peças ou 2 Peças Antiderrapante Luxo Cor:Kit Com 3 Tapetes Rosa"}, {"s": "TAP0564", "t": "Variante", "c": 22.0, "n": "Tapete Para Banheiro 3 Peças ou 2 Peças Antiderrapante Luxo Cor:Kit Com 3 Tapetes Azul Escuro"}, {"s": "TAP0565", "t": "Variante", "c": 22.0, "n": "Tapete Para Banheiro 3 Peças ou 2 Peças Antiderrapante Luxo Cor:Kit Com 3 Tapetes Cinza"}, {"s": "TAP0566", "t": "Variante", "c": 22.0, "n": "Tapete Para Banheiro 3 Peças ou 2 Peças Antiderrapante Luxo Cor:Kit Com 3 Tapetes Verde Água"}, {"s": "TAP0567", "t": "Variante", "c": 22.0, "n": "Tapete Para Banheiro 3 Peças ou 2 Peças Antiderrapante Luxo Cor:Kit Com 3 Tapetes Marrom"}, {"s": "TAP087-1", "t": "Variante", "c": 20.0, "n": "Tapete Capacho Fibra de Coco Natural Antiderrapante Grande Formato:1"}, {"s": "TAP087-10", "t": "Variante", "c": 20.0, "n": "Tapete Capacho Fibra de Coco Natural Antiderrapante Grande Formato:10"}, {"s": "TAP087-11", "t": "Variante", "c": 20.0, "n": "Tapete Capacho Fibra de Coco Natural Antiderrapante Grande Formato:11"}, {"s": "TAP087-12", "t": "Variante", "c": 20.0, "n": "Tapete Capacho Fibra de Coco Natural Antiderrapante Grande Formato:12"}, {"s": "TAP087-2", "t": "Variante", "c": 20.0, "n": "Tapete Capacho Fibra de Coco Natural Antiderrapante Grande Formato:2"}, {"s": "TAP087-3", "t": "Variante", "c": 20.0, "n": "Tapete Capacho Fibra de Coco Natural Antiderrapante Grande Formato:3"}, {"s": "TAP087-4", "t": "Variante", "c": 20.0, "n": "Tapete Capacho Fibra de Coco Natural Antiderrapante Grande Formato:4"}, {"s": "TAP087-5", "t": "Variante", "c": 20.0, "n": "Tapete Capacho Fibra de Coco Natural Antiderrapante Grande Formato:5"}, {"s": "TAP087-6", "t": "Variante", "c": 20.0, "n": "Tapete Capacho Fibra de Coco Natural Antiderrapante Grande Formato:6"}, {"s": "TAP087-7", "t": "Variante", "c": 20.0, "n": "Tapete Capacho Fibra de Coco Natural Antiderrapante Grande Formato:7"}, {"s": "TAP087-8", "t": "Variante", "c": 20.0, "n": "Tapete Capacho Fibra de Coco Natural Antiderrapante Grande Formato:8"}, {"s": "TAP087-9", "t": "Variante", "c": 20.0, "n": "Tapete Capacho Fibra de Coco Natural Antiderrapante Grande Formato:9"}, {"s": "Tap088-1", "t": "Variante", "c": 11.5, "n": "Tapete Capacho Fibra De Coco Emborrachado Grande 60x40cm Desenho:1"}, {"s": "Tap088-10", "t": "Variante", "c": 11.5, "n": "Tapete Capacho Fibra De Coco Emborrachado Grande 60x40cm Desenho:10"}, {"s": "Tap088-2", "t": "Variante", "c": 11.5, "n": "Tapete Capacho Fibra De Coco Emborrachado Grande 60x40cm Desenho:2"}, {"s": "Tap088-3", "t": "Variante", "c": 11.5, "n": "Tapete Capacho Fibra De Coco Emborrachado Grande 60x40cm Desenho:3"}, {"s": "Tap088-4", "t": "Variante", "c": 11.5, "n": "Tapete Capacho Fibra De Coco Emborrachado Grande 60x40cm Desenho:4"}, {"s": "Tap088-5", "t": "Variante", "c": 11.5, "n": "Tapete Capacho Fibra De Coco Emborrachado Grande 60x40cm Desenho:5"}, {"s": "Tap088-6", "t": "Variante", "c": 11.5, "n": "Tapete Capacho Fibra De Coco Emborrachado Grande 60x40cm Desenho:6"}, {"s": "Tap088-7", "t": "Variante", "c": 11.5, "n": "Tapete Capacho Fibra De Coco Emborrachado Grande 60x40cm Desenho:7"}, {"s": "Tap088-8", "t": "Variante", "c": 11.5, "n": "Tapete Capacho Fibra De Coco Emborrachado Grande 60x40cm Desenho:8"}, {"s": "Tap088-9", "t": "Variante", "c": 11.5, "n": "Tapete Capacho Fibra De Coco Emborrachado Grande 60x40cm Desenho:9"}, {"s": "TAP092-4", "t": "Variante", "c": 5.0, "n": "Kit 3 Tapete Toalhas de Piso Pézinho Grosso Banheiro 40x60 Cor:Sortido"}];
+let CUSTOS_LIST=[];
+function buildCustosMaps(){ CUSTOS={}; NOMEIDX=[]; for(const x of CUSTOS_LIST){ const sku=normSku(x.s); if(sku&&sku!=='NAN') CUSTOS[sku]={tipo:(x.t||''),custo:+x.c||0}; const nn=norm(x.n); if(nn.trim()&&+x.c>0) NOMEIDX.push({n:nn,custo:+x.c}); } }
+function loadCustos(){ try{ const s=localStorage.getItem('tokhome_custos'); CUSTOS_LIST = s?JSON.parse(s):CUSTOS_PADRAO.map(x=>({...x})); }catch(e){ CUSTOS_LIST=CUSTOS_PADRAO.map(x=>({...x})); } buildCustosMaps(); }
+function saveCustos(){ try{ localStorage.setItem('tokhome_custos', JSON.stringify(CUSTOS_LIST)); flash('cu-save','Salvo ✓'); }catch(e){ flash('cu-save','Salvo na sessão'); } }
+function flash(id,txt){ const b=$(id); if(!b)return; const o=b.textContent; b.textContent=txt; setTimeout(()=>b.textContent=o,1500); }
+
+function sheetRows(ws){ return XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''}); }
+function fmtDate(v){ if(v==null||v==='') return ''; if(typeof v==='number'){ const d=new Date(Date.UTC(1899,11,30)+Math.round(v)*86400000); return d.toISOString().slice(0,10); } return v.toString().slice(0,10); }
+
+function tryOrders(wb){
+  for(const name of wb.SheetNames){
+    const rows=sheetRows(wb.Sheets[name]); if(!rows.length) continue;
+    // acha a linha de cabeçalho com "ID do pedido"
+    let hi=rows.findIndex(r=>r.some(c=>(c||'').toString().trim()==='ID do pedido'));
+    if(hi<0) continue;
+    const hdr=rows[hi].map(c=>(c||'').toString().trim());
+    const idx=k=>hdr.indexOf(k);
+    const out=[];
+    for(let i=hi+1;i<rows.length;i++){
+      const r=rows[i]; if(!r[idx('ID do pedido')]) continue;
+      out.push({
+        status:(r[idx('Status do pedido')]||'').toString().trim(),
+        pedido:(r[idx('ID do pedido')]||'').toString(),
+        data:fmtDate(r[idx('Data de criação do pedido')]),
+        sku:(r[idx('Número de referência SKU')]||'').toString(),
+        sku_prin:(r[idx('Nº de referência do SKU principal')]||'').toString(),
+        produto:(r[idx('Nome do Produto')]||'').toString(),
+        variacao:(r[idx('Nome da variação')]||'').toString(),
+        qtd:+r[idx('Quantidade')]||1,
+        preco_ac:+r[idx('Preço acordado')]||0,
+        receita:+r[idx('Valor Total')]||0,
+        com:+r[idx('Taxa de comissão líquida')]||0,
+        serv:+r[idx('Taxa de serviço líquida')]||0,
+        trans:+r[idx('Taxa de transação')]||0,
+      });
+    }
+    if(out.length) return out;
+  }
+  return null;
+}
+
+function tryCustos(wb){
+  for(const name of wb.SheetNames){
+    const rows=sheetRows(wb.Sheets[name]); if(!rows.length) continue;
+    let hi=rows.findIndex(r=>r.some(c=>(c||'').toString().trim()==='SKU'));
+    if(hi<0) continue;
+    const hdr=rows[hi].map(c=>(c||'').toString().trim());
+    const ci=hdr.findIndex(h=>h.toLowerCase().includes('custo'));
+    const si=hdr.indexOf('SKU'), ni=hdr.findIndex(h=>h.toLowerCase()==='nome'), ti=hdr.findIndex(h=>h.toLowerCase()==='tipo');
+    if(ci<0) continue;
+    const list=[];
+    for(let i=hi+1;i<rows.length;i++){
+      const r=rows[i]; const sku=(r[si]||'').toString().trim(); if(!sku) continue;
+      list.push({s:sku, t:(ti>=0?(r[ti]||''):'').toString().trim(), c:parseCusto(r[ci]), n:(ni>=0?(r[ni]||''):'').toString().trim()});
+    }
+    if(list.length) return list;
+  }
+  return null;
+}
+
+function readFile(file){
+  return new Promise((res,rej)=>{
+    const fr=new FileReader();
+    fr.onload=e=>{ try{ res(XLSX.read(new Uint8Array(e.target.result),{type:'array'})); }catch(err){ rej(err); } };
+    fr.onerror=rej; fr.readAsArrayBuffer(file);
+  });
+}
+
+// ---- leitor do Mercado Livre (relatório "Export collection") ----
+function tryML(wb){
+  for(const name of wb.SheetNames){
+    const rows=sheetRows(wb.Sheets[name]); if(!rows.length) continue;
+    let hi=rows.findIndex(r=>r.some(c=>(c||'').toString().includes('transaction_amount')));
+    if(hi<0) continue;
+    const hdr=rows[hi].map(c=>(c||'').toString());
+    const ci=code=>hdr.findIndex(h=>h.includes('('+code+')'));
+    const iDate=ci('date_created'),iSku=ci('seller_custom_field'),iReason=ci('reason'),
+      iStatus=ci('status'),iOp=ci('operation_type'),iShip=ci('shipment_status'),
+      iAmt=ci('transaction_amount'),iMp=ci('mercadopago_fee'),iMkt=ci('marketplace_fee'),
+      iNet=ci('net_received_amount'),iOrder=ci('order_id'),iOpId=ci('operation_id'),iRef=ci('amount_refunded');
+    if(iAmt<0||iNet<0) continue;
+    const num=v=>{ const x=parseFloat((v==null?'':v).toString().replace(',','.')); return isNaN(x)?0:x; };
+    const out=[];
+    for(let i=hi+1;i<rows.length;i++){
+      const r=rows[i];
+      if(!(r[iOp]||'').toString().includes('payment')) continue;   // só vendas (exclui transferências)
+      const amt=num(r[iAmt]); if(!amt) continue;
+      const st=(r[iStatus]||'').toString().toLowerCase();
+      const cancel = st==='cancelled'||st==='rejected'||st==='refunded'||num(r[iRef])>0;
+      const concl = (r[iShip]||'').toString().toLowerCase()==='delivered';
+      const net=num(r[iNet]);
+      const com=Math.abs(num(r[iMkt])), trans=Math.abs(num(r[iMp]));
+      const serv=Math.max(0,(amt-net)-com-trans);     // resto = frete + cupom (no ML o frete é seu)
+      const p=(r[iDate]||'').toString().slice(0,10).split('/');
+      out.push({
+        status: cancel?'Cancelado':(concl?'Concluído':'Em aberto'),
+        pedido:'ML'+((iOpId>=0&&r[iOpId])||(iOrder>=0&&r[iOrder])||i),
+        data: p.length===3?(p[2]+'-'+p[1]+'-'+p[0]):'',
+        sku:(r[iSku]||'').toString(), sku_prin:'', produto:(r[iReason]||'').toString(), variacao:'',
+        qtd:1, preco_ac:amt, receita:amt, com, serv, trans,
+      });
+    }
+    if(out.length) return out;
+  }
+  return null;
+}
+
+async function handleFiles(list){
+  $('err').classList.add('hidden');
+  for(const f of list){
+    let wb; try{ wb=await readFile(f); }catch(e){ showErr('Não consegui ler '+f.name); continue; }
+    if(ORD_FILES.includes(f.name)){ showErr('"'+f.name+'" já foi carregado.'); continue; }
+    const o=tryOrders(wb);
+    if(o){ const loja='Shopee · '+lojaLabel(f.name); o.forEach(r=>r._loja=loja);
+      ORDERS=(ORDERS||[]).concat(o); ORD_FILES.push(f.name); setPill(); continue; }
+    const ml=tryML(wb);
+    if(ml){ const loja='ML · '+lojaLabel(f.name); ml.forEach(r=>r._loja=loja);
+      ORDERS=(ORDERS||[]).concat(ml); ORD_FILES.push(f.name); setPill(); continue; }
+    const c=tryCustos(wb); if(c){ CUSTOS_LIST=c; buildCustosMaps(); saveCustos(); renderCustos(); continue; }
+    showErr('Não reconheci "'+f.name+'" (nem Shopee, nem Mercado Livre, nem custos).');
+  }
+  if(ORDERS) analisar();
+}
+function lojaLabel(name){ return name.replace(/\.(xlsx|xls)$/i,'').slice(0,20); }
+function setPill(){ const p=$('pill-ord'); if(p) p.innerHTML='<span class="dot"></span>Pedidos: '+ORD_FILES.length+' arquivo(s) ✓'; }
+function showErr(m){ const e=$('err'); e.textContent=m; e.classList.remove('hidden'); }
+
+// ---------- cascata de custo ----------
+function matchNome(parte){
+  const ni=norm(parte); if(ni.trim().length<6) return null;
+  let cands=NOMEIDX.filter(x=>x.n.slice(0,18)===ni.slice(0,18));
+  if(!cands.length) cands=NOMEIDX.filter(x=>x.n.includes(ni.slice(0,18))||ni.includes(x.n.slice(0,18)));
+  if(!cands.length) return null;
+  return cands.reduce((a,b)=>a+b.custo,0)/cands.length;
+}
+function custoPorNome(produto){
+  if(produto.includes('+')){
+    const partes=produto.split('+').filter(p=>p.trim());
+    const cs=partes.map(matchNome);
+    if(cs.length && cs.every(c=>c!=null)) return {custo:cs.reduce((a,b)=>a+b,0),fonte:'KIT (soma)'};
+    return null;
+  }
+  const c=matchNome(produto); return c!=null?{custo:c,fonte:'NOME'}:null;
+}
+
+// ---------- cálculo ----------
+let ROWS=[], CANCELADOS=0;
+function custoLinha(r){
+  const sku=normSku(r.sku), skuP=normSku(r.sku_prin), pack=packDaVariacao(r.variacao);
+  let custo_unit=0, unidades=r.qtd, fonte='SEM CUSTO';
+  const info=CUSTOS[sku], base=sku.replace(/-[^-]+$/,'');
+  if(info && info.tipo.toUpperCase()!=='PNC'){ custo_unit=info.custo; unidades=r.qtd; fonte='SKU'; }
+  else if(info && info.tipo.toUpperCase()==='PNC'){ custo_unit=info.custo; unidades=r.qtd*pack; fonte='PNC (pack)'; }
+  else if(skuP && CUSTOS[skuP]){ custo_unit=CUSTOS[skuP].custo; unidades=r.qtd*pack; fonte='principal (pack)'; }
+  else if(base!==sku && CUSTOS[base]){ custo_unit=CUSTOS[base].custo; unidades=r.qtd; fonte='SKU base'; }
+  else { const cn=custoPorNome(r.produto); if(cn){ custo_unit=cn.custo; unidades=(pack>1?r.qtd*pack:r.qtd); fonte=cn.fonte; } }
+  return {pack,custo_unit,unidades,fonte};
+}
+function analisar(){
+  ROWS=[]; CANCELADOS=0;
+  // Inclui todos os pedidos PAGOS (exclui só Cancelado/Não pago). Marca cada um como
+  // 'Concluído' (já finalizado) ou 'Em aberto' (enviado/em entrega/janela de devolução).
+  const grupos={}, cancSet=new Set();
+  for(const r of ORDERS){ const st=(r.status||'').trim(); const key=(r._loja||'')+'||'+r.pedido;
+    if(st==='Cancelado'||st==='Não pago'){ cancSet.add(key); continue; }
+    (grupos[key]=grupos[key]||[]).push(r); }
+  CANCELADOS=cancSet.size;
+  for(const pid in grupos){
+    const linhas=grupos[pid], f=linhas[0];
+    const loja=f._loja||'', grupo=(f.status||'').trim()==='Concluído'?'Concluído':'Em aberto';
+    const recPed=f.receita, comPed=f.com, servPed=f.serv, transPed=f.trans;
+    const pesos=linhas.map(r=>(r.preco_ac||0)*(r.qtd||1));
+    const soma=pesos.reduce((a,b)=>a+b,0)||1;
+    linhas.forEach((r,i)=>{
+      const share=pesos[i]/soma;
+      const cl=custoLinha(r);
+      const receita=recPed*share, com=comPed*share, serv=servPed*share, trans=transPed*share;
+      const taxas=com+serv+trans, renda=receita-taxas, custo=cl.unidades*cl.custo_unit, lucro=renda-custo;
+      const margem=receita?lucro/receita:0;
+      const status= cl.fonte==='SEM CUSTO'?'sc':(lucro<0?'pj':(margem<0.15?'lo':'ok'));
+      ROWS.push({pedido:r.pedido,data:r.data,sku:r.sku,sku_prin:r.sku_prin,produto:r.produto,variacao:r.variacao,
+        qtd:r.qtd,pack:cl.pack,unidades:cl.unidades,receita,com,serv,trans,custo_unit:cl.custo_unit,fonte:cl.fonte,
+        taxas,renda,custo,lucro,margem,status,grupo,loja});
+    });
+  }
+  renderAll();
+}
+
+// ---------- render ----------
+let SORT={k:'lucro',dir:-1};
+function renderAll(){
+  $('drop').classList.add('hidden'); $('dash').classList.remove('hidden');
+  $('bar-ord').innerHTML='<span class="dot"></span>'+ORD_FILES.length+' loja(s): '+ORD_FILES.map(n=>n.replace(/\.(xlsx|xls)$/i,'')).join(', ').slice(0,55);
+  $('bar-cus').innerHTML='<span class="dot"></span>'+CUSTOS_LIST.length+' custos';
+
+  const sub=(arr)=>arr.reduce((a,r)=>{a.rec+=r.receita;a.tax+=r.taxas;a.ren+=r.renda;a.cus+=r.custo;a.luc+=r.lucro;
+    a.com+=r.com;a.serv+=r.serv;a.trans+=r.trans;return a;},{rec:0,tax:0,ren:0,cus:0,luc:0,com:0,serv:0,trans:0});
+  const T=sub(ROWS);
+  const conc=ROWS.filter(r=>r.grupo==='Concluído'), aber=ROWS.filter(r=>r.grupo==='Em aberto');
+  const Tc=sub(conc), Ta=sub(aber);
+  const nPed=new Set(ROWS.map(r=>r.pedido)).size;
+  const nConc=new Set(conc.map(r=>r.pedido)).size, nAber=new Set(aber.map(r=>r.pedido)).size;
+  const margem=T.rec?T.luc/T.rec:0;
+  const semcusto=ROWS.filter(r=>r.fonte==='SEM CUSTO').length;
+  const pConc=T.rec?Tc.rec/T.rec:0, pAber=T.rec?Ta.rec/T.rec:0;
+
+  // ---- painel "Vendas do período": barras POR LOJA + somado embaixo ----
+  const lojaMap={};
+  for(const r of ROWS){ const L=r.loja||'—'; const m=(lojaMap[L]=lojaMap[L]||{rec:0,conc:0,aber:0,luc:0,ped:new Set()});
+    m.rec+=r.receita; m.luc+=r.lucro; if(r.grupo==='Concluído') m.conc+=r.receita; else m.aber+=r.receita; m.ped.add(r.pedido); }
+  // data mais recente de cada loja/arquivo, para ordenar por mês (decrescente)
+  const lojaData={};
+  for(const r of ROWS){ const L=r.loja||'—'; if(/^\d{4}-\d{2}-\d{2}$/.test(r.data)&&(!lojaData[L]||r.data>lojaData[L])) lojaData[L]=r.data; }
+  const lojas=Object.entries(lojaMap).sort((a,b)=>(lojaData[b[0]]||'').localeCompare(lojaData[a[0]]||''));
+  const barras=lojas.map(([L,m])=>{
+    const pcc=m.rec?m.conc/m.rec:0, pca=m.rec?m.aber/m.rec:0;
+    return `<div class="ljrow">
+      <div class="ljhead"><span class="ljn" title="${L}">${L}</span><b>${BRL(m.rec)}</b><span class="lbl2">${m.ped.size} ped</span></div>
+      <div class="track2">
+        <div class="seg" style="width:${Math.max(6,pcc*100)}%;background:var(--pos)">${pcc>0.1?PCT(pcc):''}</div>
+        <div class="seg" style="width:${Math.max(6,pca*100)}%;background:var(--warn)">${pca>0.1?PCT(pca):''}</div>
+      </div></div>`;
+  }).join('');
+  $('splitwrap').innerHTML=`
+    <div class="split-total">
+      <div class="lbl2">Vendas do período (geral)</div>
+      <div class="big">${BRL(T.rec)}</div>
+      <div class="lbl2">${nPed} pedidos pagos · ${lojas.length} loja(s)</div>
+    </div>
+    <div class="splitbars">${barras}</div>`;
+  $('splitnote').innerHTML=`
+    <div class="splitlegend" style="margin-bottom:10px">
+      <div class="it"><span><span class="sw" style="background:var(--pos)"></span>Concluído (somado)</span><b>${BRL(Tc.rec)}</b><span class="lbl2">${nConc} pedidos</span></div>
+      <div class="it"><span><span class="sw" style="background:var(--warn)"></span>Em aberto (somado)</span><b>${BRL(Ta.rec)}</b><span class="lbl2">${nAber} pedidos</span></div>
+      <div class="it"><span><span class="sw" style="background:var(--muted)"></span>Cancelados</span><b>${CANCELADOS}</b><span class="lbl2">fora da conta</span></div>
+    </div>
+    Das suas vendas de <b>${BRL(T.rec)}</b>, <b style="color:var(--pos)">${BRL(Tc.rec)}</b> já está <b>finalizado</b> (pedidos concluídos, com taxas e margem definitivas) e <b style="color:var(--warn)">${BRL(Ta.rec)}</b> ainda está <b>em aberto</b> (enviados, em entrega ou na janela de devolução — podem mudar). Os ${CANCELADOS} cancelados/não pagos ficam fora.`;
+
+  // KPIs: uma fileira de cartões por loja (+ Total quando há mais de uma)
+  function cardsLoja(rows){
+    const s=sub(rows), conc=sub(rows.filter(r=>r.grupo==='Concluído')), aber=sub(rows.filter(r=>r.grupo==='Em aberto'));
+    const np=new Set(rows.map(r=>r.pedido)).size;
+    const nc=new Set(rows.filter(r=>r.grupo==='Concluído').map(r=>r.pedido)).size;
+    const na=new Set(rows.filter(r=>r.grupo==='Em aberto').map(r=>r.pedido)).size;
+    const mg=s.rec?s.luc/s.rec:0, pcf=v=>s.rec?v/s.rec:0;
+    return [
+      ['Vendas',BRL(s.rec),'',np+' pedidos'],
+      ['Concluído',BRL(conc.rec),'pos',nc+' ped · '+PCT(pcf(conc.rec))],
+      ['Em aberto',BRL(aber.rec),'',na+' ped · '+PCT(pcf(aber.rec))],
+      ['Taxas',BRL(s.tax),'neg',PCT(pcf(s.tax))+' da receita'],
+      ['Renda líquida',BRL(s.ren),'',''],
+      ['Lucro',BRL(s.luc),s.luc>=0?'pos':'neg','margem '+PCT(mg)],
+    ].map(k=>`<div class="kpi"><div class="lbl">${k[0]}</div><div class="val ${k[2]}">${k[1]}</div>${k[3]?`<div class="small">${k[3]}</div>`:''}</div>`).join('');
+  }
+  let blocos='';
+  // lojas já ordenadas por data mais recente (decrescente)
+  const lojasOrd=lojas.map(([L])=>L);
+  for(const L of lojasOrd){
+    const rows=ROWS.filter(r=>(r.loja||'—')===L);
+    const s=sub(rows), mg=s.rec?s.luc/s.rec:0;
+    blocos+=`<div class="loja-bloco"><div class="loja-titulo">${L} <span class="lt-tot">${BRL(s.rec)} · margem ${PCT(mg)}</span></div><div class="kpirow">${cardsLoja(rows)}</div></div>`;
+  }
+  if(lojasOrd.length>1){
+    blocos=`<div class="loja-bloco"><div class="loja-titulo total">Total · todas as lojas <span class="lt-tot">${BRL(T.rec)} · margem ${PCT(margem)}</span></div><div class="kpirow">${cardsLoja(ROWS)}</div></div>`+blocos;
+  }
+  $('kpis').innerHTML=blocos;
+
+  // resumo por SKU principal
+  const g={};
+  for(const r of ROWS){ const k=r.sku_prin||r.sku; (g[k]=g[k]||{prin:k,prod:r.produto,un:0,rec:0,tax:0,ren:0,cus:0,luc:0})
+    ; g[k].un+=r.unidades; g[k].rec+=r.receita; g[k].tax+=r.taxas; g[k].ren+=r.renda; g[k].cus+=r.custo; g[k].luc+=r.lucro; }
+  let G=Object.values(g).map(x=>({...x,margem:x.rec?x.luc/x.rec:0}));
+
+  // escada (top 14 por receita, ordenada por margem)
+  const lad=[...G].sort((a,b)=>b.rec-a.rec).slice(0,14).sort((a,b)=>b.margem-a.margem);
+  $('ladder').innerHTML=lad.map(x=>{
+    const w=Math.max(2,Math.min(100,(x.margem/0.45)*100));
+    const col=x.margem<0?'var(--neg)':x.margem<0.15?'var(--warn)':'var(--pos)';
+    return `<div class="lrow"><div class="nm" title="${x.prod}">${(x.prod||x.prin).slice(0,26)}<br><small>${x.prin}</small></div>
+      <div class="track"><div class="fill" style="width:${w}%;background:${col}"></div></div>
+      <div class="mv" style="color:${col}">${PCT(x.margem)}</div></div>`;
+  }).join('');
+
+  // para onde vai a receita
+  const seg=[['Comissão',T.com,'#EE4D2D'],['Serviço',T.serv,'#E59866'],['Transação',T.trans,'#D4AC6E'],['Custo',T.cus,'#5C6B68'],['Lucro',Math.max(0,T.luc),'#0F6E5C']];
+  const tot=seg.reduce((a,s)=>a+s[1],0)||1;
+  $('feebar').innerHTML=seg.map(s=>`<span style="width:${s[1]/tot*100}%;background:${s[2]}"></span>`).join('');
+  $('feeleg').innerHTML=seg.map(s=>`<div><span class="sw" style="background:${s[2]}"></span>${s[0]} <b>${BRL(s[1])}</b></div>`).join('');
+
+  // alertas
+  const alvo=(+$('alvo').value||15)/100;
+  const prejuizo=G.filter(x=>x.luc<0).sort((a,b)=>a.luc-b.luc);
+  const baixa=G.filter(x=>x.luc>=0 && x.margem<alvo).sort((a,b)=>a.margem-b.margem);
+  const sc=Object.values(ROWS.filter(r=>r.fonte==='SEM CUSTO').reduce((a,r)=>{const k=r.sku_prin||r.sku;(a[k]=a[k]||{k,rec:0,n:0});a[k].rec+=r.receita;a[k].n++;return a;},{})).sort((a,b)=>b.rec-a.rec);
+  const li=(arr,f)=>arr.slice(0,6).map(f).join('')||'<li style="color:var(--muted)">nenhum 🎉</li>';
+  $('alerts').innerHTML=`
+    <div class="alert bad"><div class="at">⚠ Vendendo no prejuízo (${prejuizo.length})</div><ul>
+      ${li(prejuizo,x=>`<li><span>${(x.prod||x.prin).slice(0,30)}</span><span>${PCT(x.margem)}</span></li>`)}</ul></div>
+    <div class="alert warn"><div class="at">↓ Abaixo da margem alvo (${baixa.length})</div><ul>
+      ${li(baixa,x=>`<li><span>${(x.prod||x.prin).slice(0,30)}</span><span>${PCT(x.margem)}</span></li>`)}</ul></div>
+    <div class="alert info"><div class="at">∅ Sem custo cadastrado (${sc.length} SKUs)</div><ul>
+      ${li(sc,x=>`<li><span>${x.k}</span><span>${BRL(x.rec)}</span></li>`)}</ul></div>`;
+
+  renderPeriodoEMes();
+  renderTable();
+}
+
+const MESES=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+const fmtBR=d=>{ const p=d.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; };
+function deltaTag(cur,prev,goodUp,isPP){
+  if(prev==null) return '<span class="dlt neu">—</span>';
+  let val,txt;
+  if(isPP){ val=(cur-prev)*100; txt=(val>=0?'▲ +':'▼ ')+Math.abs(val).toFixed(1).replace('.',',')+' pp'; }
+  else { if(!prev) return '<span class="dlt neu">—</span>'; val=(cur-prev)/Math.abs(prev)*100; txt=(val>=0?'▲ +':'▼ -')+Math.abs(val).toFixed(1).replace('.',',')+'%'; }
+  let cls='neu';
+  if(goodUp!==null && Math.abs(val)>=0.05){ const good= goodUp? val>0 : val<0; cls=good?'up':'down'; }
+  return `<span class="dlt ${cls}">${txt}</span>`;
+}
+function renderPeriodoEMes(){
+  const sub=(arr)=>arr.reduce((a,r)=>{a.rec+=r.receita;a.tax+=r.taxas;a.ren+=r.renda;a.cus+=r.custo;a.luc+=r.lucro;return a;},{rec:0,tax:0,ren:0,cus:0,luc:0});
+  const datas=ROWS.map(r=>r.data).filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
+  const meses=[...new Set(ROWS.map(r=>r.data.slice(0,7)).filter(x=>/^\d{4}-\d{2}$/.test(x)))].sort();
+  if(datas.length){
+    const nomes=meses.map(ym=>MESES[+ym.split('-')[1]-1]);
+    $('periodo-topo').innerHTML='Período: <b>'+fmtBR(datas[0])+' a '+fmtBR(datas[datas.length-1])+'</b> ('+nomes.join(', ')+')';
+  } else $('periodo-topo').innerHTML='';
+
+  // agrega por mês
+  const porMes={};
+  for(const r of ROWS){ const ym=r.data.slice(0,7); if(!/^\d{4}-\d{2}$/.test(ym)) continue; (porMes[ym]=porMes[ym]||[]).push(r); }
+  const md=meses.map(ym=>{
+    const rows=porMes[ym], s=sub(rows), conc=sub(rows.filter(r=>r.grupo==='Concluído')), aber=sub(rows.filter(r=>r.grupo==='Em aberto'));
+    return {ym, nome:MESES[+ym.split('-')[1]-1]+'/'+ym.split('-')[0], nomeCurto:MESES[+ym.split('-')[1]-1],
+      rec:s.rec, tax:s.tax, ren:s.ren, luc:s.luc, conc:conc.rec, aber:aber.rec, margem:s.rec?s.luc/s.rec:0,
+      np:new Set(rows.map(r=>r.pedido)).size,
+      nc:new Set(rows.filter(r=>r.grupo==='Concluído').map(r=>r.pedido)).size,
+      na:new Set(rows.filter(r=>r.grupo==='Em aberto').map(r=>r.pedido)).size};
+  });
+
+  // tabela-resumo (uma linha por mês, decrescente)
+  let thead='<thead><tr><th class="l">Mês</th><th>Vendas</th><th>Concluído</th><th>Em aberto</th><th>Taxas</th><th>Renda líq.</th><th>Lucro</th><th>Margem</th></tr></thead>';
+  let tb='';
+  for(let i=md.length-1;i>=0;i--){ const m=md[i];
+    tb+=`<tr><td class="l">${m.nome}</td><td>${BRL(m.rec)}</td><td class="pos">${BRL(m.conc)}</td><td>${BRL(m.aber)}</td><td class="neg">${BRL(m.tax)}</td><td>${BRL(m.ren)}</td><td class="${m.luc>=0?'pos':'neg'}">${BRL(m.luc)}</td><td class="${m.margem>=0?'pos':'neg'}">${PCT(m.margem)}</td></tr>`;
+  }
+  // linha total
+  const tt=sub(ROWS);
+  tb+=`<tr style="border-top:2px solid var(--ink);font-weight:700"><td class="l"><b>Total</b></td><td><b>${BRL(tt.rec)}</b></td><td class="pos"><b>${BRL(md.reduce((a,m)=>a+m.conc,0))}</b></td><td><b>${BRL(md.reduce((a,m)=>a+m.aber,0))}</b></td><td class="neg"><b>${BRL(tt.tax)}</b></td><td><b>${BRL(tt.ren)}</b></td><td class="${tt.luc>=0?'pos':'neg'}"><b>${BRL(tt.luc)}</b></td><td class="${tt.luc>=0?'pos':'neg'}"><b>${PCT(tt.rec?tt.luc/tt.rec:0)}</b></td></tr>`;
+  $('pormes-tbl').innerHTML=thead+'<tbody>'+tb+'</tbody>';
+
+  // gráficos (ordem cronológica: mais antigo à esquerda)
+  desenharGraficos(md);
+}
+let CHARTS={};
+function desenharGraficos(md){
+  if(typeof Chart==='undefined') return; // sem internet p/ a lib de gráficos
+  for(const k in CHARTS){ try{CHARTS[k].destroy();}catch(e){} }
+  CHARTS={};
+  try{ if(window.ChartDataLabels && !Chart.registry.plugins.get('datalabels')) Chart.register(ChartDataLabels); }catch(e){}
+  const cs=getComputedStyle(document.documentElement);
+  const ink=(cs.getPropertyValue('--ink')||'#14201E').trim();
+  const mut=(cs.getPropertyValue('--muted')||'#5C6B68').trim();
+  const grid='rgba(120,120,120,0.15)';
+  const labels=md.map(m=>m.nomeCurto.charAt(0).toUpperCase()+m.nomeCurto.slice(1));
+  const kbrl=v=>'R$ '+(v/1000).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'k';
+  const custoMes=md.map(m=>Math.max(0,m.ren-m.luc));
+
+  CHARTS.g1=new Chart($('g1'),{type:'bar',
+    data:{labels,datasets:[
+      {label:'Vendas',data:md.map(m=>m.rec),backgroundColor:'#2a78d6',borderRadius:4,maxBarThickness:46},
+      {label:'Lucro',data:md.map(m=>m.luc),backgroundColor:'#1baf7a',borderRadius:4,maxBarThickness:46}]},
+    options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:22}},
+      plugins:{legend:{display:false},
+        datalabels:{anchor:'end',align:'end',offset:2,color:ink,font:{size:10,weight:'500'},formatter:kbrl},
+        tooltip:{callbacks:{label:c=>c.dataset.label+': '+BRL(c.parsed.y)}}},
+      scales:{x:{grid:{display:false},ticks:{color:mut}},
+        y:{grid:{color:grid},ticks:{color:mut,callback:v=>'R$ '+(v/1000)+'k'}}}}});
+
+  CHARTS.g2=new Chart($('g2'),{type:'line',
+    data:{labels,datasets:[{label:'Margem',data:md.map(m=>+(m.margem*100).toFixed(1)),borderColor:'#0F6E5C',
+      borderWidth:2,pointRadius:5,pointBackgroundColor:'#0F6E5C',tension:0.25,fill:false}]},
+    options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:24,right:12}},
+      plugins:{legend:{display:false},
+        datalabels:{anchor:'end',align:'top',offset:4,color:ink,font:{size:11,weight:'500'},
+          formatter:v=>v.toLocaleString('pt-BR',{minimumFractionDigits:1})+'%'},
+        tooltip:{callbacks:{label:c=>'Margem: '+c.parsed.y+'%'}}},
+      scales:{x:{grid:{display:false},ticks:{color:mut}},
+        y:{grid:{color:grid},ticks:{color:mut,callback:v=>v+'%'},suggestedMin:0}}}});
+
+  CHARTS.g3=new Chart($('g3'),{type:'bar',
+    data:{labels,datasets:[
+      {label:'Taxas',data:md.map(m=>m.tax),backgroundColor:'#e34948',maxBarThickness:60},
+      {label:'Custo do produto',data:custoMes,backgroundColor:'#888780',maxBarThickness:60},
+      {label:'Lucro',data:md.map(m=>m.luc),backgroundColor:'#1baf7a',maxBarThickness:60}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},
+        datalabels:{color:'#fff',font:{size:10,weight:'500'},formatter:kbrl,
+          display:c=>c.dataset.data[c.dataIndex]>(md.reduce((a,m)=>a+m.rec,0)/md.length)*0.06},
+        tooltip:{callbacks:{label:c=>c.dataset.label+': '+BRL(c.parsed.y)}}},
+      scales:{x:{stacked:true,grid:{display:false},ticks:{color:mut}},
+        y:{stacked:true,grid:{color:grid},ticks:{color:mut,callback:v=>'R$ '+(v/1000)+'k'}}}}});
+}
+function renderTable(){
+  const q=norm($('search').value);
+  let rows=ROWS.filter(r=>!q || norm(r.sku).includes(q)||norm(r.produto).includes(q)||norm(r.sku_prin).includes(q)||norm(r.pedido).includes(q));
+  rows.sort((a,b)=>{const k=SORT.k;let x=a[k],y=b[k];if(typeof x==='string'){x=x.toLowerCase();y=y.toLowerCase();return x<y?-SORT.dir:x>y?SORT.dir:0;}return (x-y)*SORT.dir;});
+  const tag={ok:['ok','OK'],lo:['lo','BAIXA'],pj:['pj','PREJUÍZO'],sc:['sc','SEM CUSTO']};
+  $('tbody').innerHTML=rows.slice(0,600).map(r=>`<tr>
+    <td class="l">${r.pedido}</td><td class="l">${r.data}</td><td class="l">${r.sku}</td>
+    <td class="l">${r.sku_prin}</td><td class="l" title="${r.produto}">${r.produto.slice(0,42)}</td>
+    <td>${r.unidades}</td><td>${BRL(r.receita)}</td><td class="neg">${BRL(r.taxas)}</td>
+    <td>${BRL(r.renda)}</td><td>${BRL(r.custo)}</td>
+    <td class="${r.lucro>=0?'pos':'neg'}">${BRL(r.lucro)}</td>
+    <td class="${r.margem>=0.15?'pos':r.margem<0?'neg':''}">${r.fonte==='SEM CUSTO'?'—':PCT(r.margem)}</td>
+    <td class="l"><span class="tag ${r.grupo==='Concluído'?'ok':'lo'}">${r.grupo==='Concluído'?'CONCLUÍDO':'EM ABERTO'}</span></td>
+    <td class="l"><span class="tag ${tag[r.status][0]}">${tag[r.status][1]}</span></td></tr>`).join('')
+    + (rows.length>600?`<tr><td class="l" colspan="14" style="color:var(--muted)">mostrando 600 de ${rows.length} linhas — use a busca para filtrar</td></tr>`:'');
+}
+
+// ---------- export ----------
+function round2(v){return +(+v).toFixed(2);}
+const _BD={style:'thin',color:{rgb:'D7DEDB'}};
+const _BORDER={top:_BD,bottom:_BD,left:_BD,right:_BD};
+const _HDR={fill:{patternType:'solid',fgColor:{rgb:'14201E'}},font:{bold:true,color:{rgb:'FFFFFF'},sz:10},alignment:{horizontal:'center',vertical:'center',wrapText:true},border:_BORDER};
+function styleSheet(ws,fmtMap,colorCols){
+  const range=XLSX.utils.decode_range(ws['!ref']); const hdr={};
+  for(let c=range.s.c;c<=range.e.c;c++){ const a=XLSX.utils.encode_cell({r:0,c}); if(ws[a]){ ws[a].s=_HDR; hdr[ws[a].v]=c; } }
+  for(let r=1;r<=range.e.r;r++){
+    const even=r%2===0;
+    for(let c=range.s.c;c<=range.e.c;c++){
+      const a=XLSX.utils.encode_cell({r,c}); const cell=ws[a]; if(!cell) continue;
+      const num=typeof cell.v==='number';
+      cell.s={border:_BORDER,alignment:{horizontal:num?'right':'left',vertical:'center'},font:{sz:10}};
+      if(even) cell.s.fill={patternType:'solid',fgColor:{rgb:'F4F7F5'}};
+    }
+    for(const name in fmtMap){ const c=hdr[name]; if(c==null) continue; const a=XLSX.utils.encode_cell({r,c}); if(ws[a]&&typeof ws[a].v==='number') ws[a].z=fmtMap[name]; }
+    (colorCols||[]).forEach(name=>{ const c=hdr[name]; if(c==null) return; const a=XLSX.utils.encode_cell({r,c}); const cell=ws[a];
+      if(cell&&typeof cell.v==='number'){ cell.s.font={sz:10,bold:true,color:{rgb:cell.v<0?'C0392B':'0F6E5C'}}; } });
+  }
+  ws['!cols']=Object.keys(hdr).map(h=>({wch:Math.max(11,h.length+2)}));
+}
+function exportar(){
+  const M='"R$"#,##0.00', P='0.0%';
+  const datas=ROWS.map(r=>r.data).filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
+  const fmtD=d=>{ const p=d.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; };
+  const periodo = datas.length? (fmtD(datas[0])+' a '+fmtD(datas[datas.length-1])) : '—';
+  const sumA=arr=>arr.reduce((a,r)=>{a.rec+=r.receita;a.com+=r.com;a.serv+=r.serv;a.trans+=r.trans;a.ren+=r.renda;a.cus+=r.custo;a.luc+=r.lucro;return a;},{rec:0,com:0,serv:0,trans:0,ren:0,cus:0,luc:0});
+  const T=sumA(ROWS);
+  const Tc=sumA(ROWS.filter(r=>r.grupo==='Concluído')), Ta=sumA(ROWS.filter(r=>r.grupo==='Em aberto'));
+  const nPed=new Set(ROWS.map(r=>r.pedido)).size;
+  const nC=new Set(ROWS.filter(r=>r.grupo==='Concluído').map(r=>r.pedido)).size;
+  const nA=new Set(ROWS.filter(r=>r.grupo==='Em aberto').map(r=>r.pedido)).size;
+  const tax=T.com+T.serv+T.trans, marg=T.rec?T.luc/T.rec:0, pc=v=>T.rec?v/T.rec:0;
+
+  // ----- aba Resumo -----
+  const aoa=[
+    ['ANÁLISE DE MARGEM · SHOPEE + MERCADO LIVRE'],
+    ['Período', periodo],
+    ['Gerado em', new Date().toLocaleDateString('pt-BR')],
+    [],
+    ['VENDAS DO PERÍODO','Valor (R$)','Pedidos'],
+    ['Geral (pagos)', round2(T.rec), nPed],
+    ['  • Concluído (finalizado)', round2(Tc.rec), nC],
+    ['  • Em aberto (enviado/em entrega)', round2(Ta.rec), nA],
+    ['Cancelados / não pagos (fora da conta)', '', CANCELADOS],
+  ];
+  if(ORD_FILES.length>1){
+    const pl={}; for(const r of ROWS){ const L=r.loja||'—'; (pl[L]=pl[L]||{rec:0,ped:new Set()}); pl[L].rec+=r.receita; pl[L].ped.add(r.pedido); }
+    aoa.push([], ['POR LOJA','Valor (R$)','Pedidos']);
+    Object.entries(pl).forEach(([L,v])=>aoa.push([L, round2(v.rec), v.ped.size]));
+  }
+  aoa.push(
+    [],
+    ['RESULTADO (sobre o geral)','Valor (R$)','% da receita'],
+    ['Receita (vendas)', round2(T.rec), 1],
+    ['(−) Comissão', round2(T.com), pc(T.com)],
+    ['(−) Taxa de serviço', round2(T.serv), pc(T.serv)],
+    ['(−) Taxa de transação', round2(T.trans), pc(T.trans)],
+    ['(−) Total de taxas da plataforma', round2(tax), pc(tax)],
+    ['(=) Renda líquida', round2(T.ren), pc(T.ren)],
+    ['(−) Custo dos produtos', round2(T.cus), pc(T.cus)],
+    ['(=) Lucro', round2(T.luc), pc(T.luc)],
+    ['Margem final', '', marg],
+    [],
+    ['O QUE É CADA TAXA'],
+    ['Comissão', 'Percentual que a Shopee cobra sobre cada venda. Varia conforme a categoria do produto.'],
+    ['Taxa de serviço', 'Inclui o programa de Frete Grátis e serviços da plataforma. É a taxa que mais pesa.'],
+    ['Taxa de transação', 'Custo de processamento do pagamento (cartão, Pix, boleto).'],
+    [],
+    ['SITUAÇÃO DOS PEDIDOS'],
+    ['Concluído', 'Pedido finalizado (fechou a janela de devolução). Taxas e margem definitivas.'],
+    ['Em aberto', 'Pago mas ainda enviado/em entrega/na janela de devolução. Pode mudar.'],
+    [],
+    ['FRETE'],
+    ['Shopee', 'Coberto pelo comprador + subsídio da Shopee. Sua parte já está na Taxa de serviço — não é descontada de novo.'],
+    ['Mercado Livre', 'O frete sai de você (Mercado Envios) e JÁ está descontado no valor líquido recebido.'],
+  );
+  const wsR=XLSX.utils.aoa_to_sheet(aoa);
+  wsR['!cols']=[{wch:40},{wch:52},{wch:13}];
+  const setS=(addr,s)=>{ if(wsR[addr]) wsR[addr].s=s; };
+  setS('A1',{font:{bold:true,sz:14,color:{rgb:'14201E'}}});
+  let mode=null;
+  aoa.forEach((row,ri)=>{
+    const A=(row[0]||'').toString(), rr=ri+1;
+    if(A==='VENDAS DO PERÍODO'||A==='POR LOJA'||A.indexOf('RESULTADO')===0){
+      mode = A.indexOf('RESULTADO')===0 ? 'pct' : 'int';
+      ['A','B','C'].forEach(col=>setS(col+rr,{fill:{patternType:'solid',fgColor:{rgb:'14201E'}},font:{bold:true,color:{rgb:'FFFFFF'},sz:10},alignment:{horizontal:col==='A'?'left':'right',vertical:'center'},border:_BORDER}));
+      return;
+    }
+    if(['O QUE É CADA TAXA','SITUAÇÃO DOS PEDIDOS','FRETE'].includes(A)){ mode=null; setS('A'+rr,{fill:{patternType:'solid',fgColor:{rgb:'E2F1ED'}},font:{bold:true,color:{rgb:'0F6E5C'},sz:11}}); return; }
+    // formatos numéricos
+    const b=wsR['B'+rr], c=wsR['C'+rr];
+    if(b&&typeof b.v==='number') b.z=M;
+    if(c&&typeof c.v==='number') c.z = mode==='pct'?P:'0';
+    // negrito nas linhas-chave
+    if(['Geral (pagos)','(=) Renda líquida','(=) Lucro','Margem final'].includes(A)){
+      ['A','B','C'].forEach(col=>{ const cell=wsR[col+rr]; if(cell) cell.s=Object.assign({font:{bold:true,sz:11}},cell.s||{},{font:{bold:true,sz:11}}); });
+      if(A==='(=) Lucro'&&wsR['B'+rr]) wsR['B'+rr].s={font:{bold:true,sz:12,color:{rgb:T.luc<0?'C0392B':'0F6E5C'}}};
+      if(A==='Margem final'&&wsR['C'+rr]) wsR['C'+rr].s={font:{bold:true,sz:12,color:{rgb:marg<0?'C0392B':'0F6E5C'}},alignment:{horizontal:'right'}};
+    }
+  });
+
+  // ----- aba Por SKU -----
+  const g={};
+  for(const r of ROWS){const k=r.sku_prin||r.sku;(g[k]=g[k]||{Principal:k,Produto:r.produto,Unidades:0,Receita:0,Comissao:0,Servico:0,Transacao:0,Taxas:0,Renda:0,Custo:0,Lucro:0});
+    const o=g[k];o.Unidades+=r.unidades;o.Receita+=r.receita;o.Comissao+=r.com;o.Servico+=r.serv;o.Transacao+=r.trans;o.Taxas+=r.taxas;o.Renda+=r.renda;o.Custo+=r.custo;o.Lucro+=r.lucro;}
+  const resumo=Object.values(g).sort((a,b)=>b.Lucro-a.Lucro).map(x=>({
+    Principal:x.Principal,Produto:x.Produto,Unidades:x.Unidades,Receita:round2(x.Receita),
+    Comissao:round2(x.Comissao),Servico:round2(x.Servico),Transacao:round2(x.Transacao),
+    Taxas:round2(x.Taxas),'Taxa %':x.Receita?+(x.Taxas/x.Receita).toFixed(4):0,
+    Renda:round2(x.Renda),Custo:round2(x.Custo),Lucro:round2(x.Lucro),
+    Margem:x.Receita?+(x.Lucro/x.Receita).toFixed(4):0}));
+  const wsSKU=XLSX.utils.json_to_sheet(resumo);
+  styleSheet(wsSKU,{Receita:M,Comissao:M,Servico:M,Transacao:M,Taxas:M,'Taxa %':P,Renda:M,Custo:M,Lucro:M,Margem:P},['Lucro','Margem']);
+
+  // ----- aba Vendas por pedido -----
+  const vendas=ROWS.map(r=>({Loja:r.loja,Pedido:r.pedido,Data:r.data,SKU:r.sku,Principal:r.sku_prin,Produto:r.produto,
+    Variacao:r.variacao,Qtd:r.qtd,Pack:r.pack,Unidades:r.unidades,Receita:round2(r.receita),
+    Comissao:round2(r.com),Servico:round2(r.serv),Transacao:round2(r.trans),Taxas:round2(r.taxas),
+    Renda:round2(r.renda),CustoUnit:round2(r.custo_unit),Custo:round2(r.custo),Lucro:round2(r.lucro),
+    Margem:r.receita?+r.margem.toFixed(4):0,Situacao:r.grupo,Origem:r.fonte}));
+  const wsV=XLSX.utils.json_to_sheet(vendas);
+  styleSheet(wsV,{Receita:M,Comissao:M,Servico:M,Transacao:M,Taxas:M,Renda:M,CustoUnit:M,Custo:M,Lucro:M,Margem:P},['Lucro','Margem']);
+
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,wsR,'Resumo');
+  XLSX.utils.book_append_sheet(wb,wsSKU,'Por SKU');
+  XLSX.utils.book_append_sheet(wb,wsV,'Vendas por pedido');
+  XLSX.writeFile(wb,'analise_margem_shopee.xlsx');
+}
+
+// ---------- eventos ----------
+const drop=$('drop');
+drop.addEventListener('click',()=>$('file').click());
+$('file').addEventListener('change',e=>handleFiles(e.target.files));
+['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over');}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over');}));
+drop.addEventListener('drop',e=>handleFiles(e.dataTransfer.files));
+$('search').addEventListener('input',renderTable);
+$('alvo').addEventListener('input',renderAll);
+$('btn-export').addEventListener('click',exportar);
+$('btn-reset').addEventListener('click',()=>location.reload());
+document.querySelectorAll('#tbl th').forEach(th=>th.addEventListener('click',()=>{
+  const k=th.dataset.k; SORT.dir=(SORT.k===k)?-SORT.dir:-1; SORT.k=k; renderTable();
+}));
+
+// ---------- gerenciador de custos ----------
+function renderCustos(){
+  const pill=$('custos-pill'); if(pill) pill.innerHTML='<span class="dot"></span>Custos: '+CUSTOS_LIST.length+' cadastrados';
+  if($('custos-count')) $('custos-count').textContent=CUSTOS_LIST.length+' itens';
+  const q=norm(($('custos-search')||{}).value||'');
+  const rows=CUSTOS_LIST.map((x,i)=>({x,i})).filter(({x})=>!q||norm(x.s).includes(q)||norm(x.n).includes(q));
+  const esc=s=>(s||'').toString().replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+  $('cu-tbody').innerHTML=rows.slice(0,300).map(({x,i})=>`<tr>
+    <td class="l"><input data-i="${i}" data-f="s" value="${esc(x.s)}" style="width:110px"></td>
+    <td class="l"><input data-i="${i}" data-f="n" value="${esc(x.n)}"></td>
+    <td class="l"><select data-i="${i}" data-f="t">${['Variante','Principal','PNC'].map(t=>`<option ${x.t===t?'selected':''}>${t}</option>`).join('')}</select></td>
+    <td><input data-i="${i}" data-f="c" type="number" step="0.01" value="${x.c}" style="width:80px;text-align:right"></td>
+    <td><button class="cu-del" data-del="${i}">✕</button></td></tr>`).join('')
+    + (rows.length>300?`<tr><td colspan="5" class="l" style="color:var(--muted)">mostrando 300 de ${rows.length} — use a busca</td></tr>`:'');
+}
+$('btn-custos').addEventListener('click',()=>$('custos-panel').classList.toggle('hidden'));
+$('custos-search').addEventListener('input',renderCustos);
+$('cu-tbody').addEventListener('change',e=>{ const t=e.target; if(t.dataset.i!=null){
+  const i=+t.dataset.i,f=t.dataset.f; CUSTOS_LIST[i][f]= f==='c'?(parseFloat(t.value)||0):t.value;
+  buildCustosMaps(); if(ORDERS) analisar(); }});
+$('cu-tbody').addEventListener('click',e=>{ if(e.target.dataset.del!=null){
+  CUSTOS_LIST.splice(+e.target.dataset.del,1); buildCustosMaps(); renderCustos(); if(ORDERS) analisar(); }});
+$('cu-add').addEventListener('click',()=>{ const s=$('add-sku').value.trim(); if(!s){$('add-sku').focus();return;}
+  CUSTOS_LIST.unshift({s, n:$('add-nome').value.trim(), t:$('add-tipo').value, c:parseFloat($('add-custo').value)||0});
+  $('add-sku').value=$('add-nome').value=$('add-custo').value=''; buildCustosMaps(); renderCustos(); if(ORDERS) analisar(); });
+$('cu-save').addEventListener('click',saveCustos);
+$('cu-restore').addEventListener('click',()=>{ if(confirm('Restaurar a lista de custos original (apaga suas edições)?')){
+  CUSTOS_LIST=CUSTOS_PADRAO.map(x=>({...x})); buildCustosMaps(); saveCustos(); renderCustos(); if(ORDERS) analisar(); }});
+$('cu-export').addEventListener('click',()=>{ const data=CUSTOS_LIST.map(x=>({SKU:x.s,Nome:x.n,Tipo:x.t,'Custo Un (R$)':x.c}));
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(data),'Custos'); XLSX.writeFile(wb,'custos_principais.xlsx'); });
+
+// init
+loadCustos(); renderCustos();
+</script>
+</body>
+</html>

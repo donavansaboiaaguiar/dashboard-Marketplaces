@@ -19,6 +19,16 @@
     --radius:14px;
   }
   *{box-sizing:border-box;margin:0;padding:0}
+  #gate{position:fixed;inset:0;z-index:99999;background:#EAEEEC;display:flex;align-items:center;justify-content:center;padding:20px}
+  .gatebox{background:#FFFFFF;border:1px solid #D7DEDB;border-radius:16px;padding:34px 30px;width:100%;max-width:360px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.08)}
+  .gate-eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#EE4D2D;font-weight:700}
+  .gate-titulo{font-family:'Hanken Grotesk',sans-serif;font-size:22px;font-weight:800;margin:6px 0 4px}
+  .gate-sub{color:#5C6B68;font-size:13px;margin-bottom:18px}
+  #gate-pass{width:100%;padding:12px 14px;border:1px solid #D7DEDB;border-radius:10px;font-size:15px;background:#F4F7F5;box-sizing:border-box}
+  #gate-pass:focus{outline:none;border-color:#0F6E5C}
+  #gate-btn{width:100%;margin-top:12px;padding:12px;background:#0F6E5C;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer}
+  #gate-btn:hover{background:#0c5a4b}
+  #gate-err{color:#C0392B;font-size:13px;margin-top:12px;min-height:18px}
   body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--ink);
     -webkit-font-smoothing:antialiased;padding:22px;line-height:1.45}
   .wrap{max-width:1240px;margin:0 auto}
@@ -149,6 +159,34 @@
 </style>
 </head>
 <body>
+<div id="gate">
+  <div class="gatebox">
+    <div class="gate-eyebrow">Tok Home</div>
+    <div class="gate-titulo">Painel de margem</div>
+    <div class="gate-sub">Digite a senha para acessar</div>
+    <input id="gate-pass" type="password" placeholder="Senha" autocomplete="current-password">
+    <button id="gate-btn">Entrar</button>
+    <div id="gate-err"></div>
+  </div>
+</div>
+<script>
+(function(){
+  var HASH='70e956a3ec97a52dc055a331ba73190c52c950c406e245c10cd4974b0423eea3';
+  var SALT='tokhome-v1:';
+  var g=document.getElementById('gate');
+  try{ if(localStorage.getItem('th_auth')===HASH){ g.style.display='none'; return; } }catch(e){}
+  async function sha(t){ var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t)); return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,'0');}).join(''); }
+  async function entrar(){
+    var v=document.getElementById('gate-pass').value;
+    var h=await sha(SALT+v);
+    if(h===HASH){ try{localStorage.setItem('th_auth',HASH);}catch(e){} g.style.display='none'; }
+    else { document.getElementById('gate-err').textContent='Senha incorreta. Tente de novo.'; document.getElementById('gate-pass').value=''; }
+  }
+  document.getElementById('gate-btn').addEventListener('click',entrar);
+  document.getElementById('gate-pass').addEventListener('keydown',function(e){ if(e.key==='Enter') entrar(); });
+  document.getElementById('gate-pass').focus();
+})();
+</script>
 <div class="wrap">
   <header>
     <div class="eyebrow">Tok Home · análise de vendas</div>

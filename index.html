@@ -69,10 +69,15 @@
   /* período + por mês */
   .periodo-topo{font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--muted);margin-top:14px;padding:9px 14px;background:var(--field);border-radius:10px;display:inline-block}
   .periodo-topo b{color:var(--ink)}
-  .chart-titulo{font-family:'Hanken Grotesk',sans-serif;font-size:13px;font-weight:700;margin-bottom:6px}
-  .chart-leg{display:flex;gap:14px;font-size:11px;color:var(--muted);margin-bottom:10px;flex-wrap:wrap}
+  .chart-titulo{font-family:'Hanken Grotesk',sans-serif;font-size:13px;font-weight:700}
+  .charts6{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:760px){.charts6{grid-template-columns:1fr}}
+  .chart-cell{min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px 12px}
+  .chart-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:9px;margin-bottom:12px}
+  .chart-box{position:relative;width:100%;height:210px}
+  .chart-leg{display:flex;gap:12px;font-size:11px;color:var(--muted);flex-wrap:wrap;align-items:center}
   .chart-leg .sw{width:10px;height:10px;border-radius:2px;display:inline-block;margin-right:4px;vertical-align:middle}
-  .chart-box{position:relative;width:100%;height:260px}
+  .chart-box{position:relative;width:100%;height:230px}
   .kpirow{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
   @media(max-width:920px){.kpirow{grid-template-columns:repeat(3,1fr)}}
   @media(max-width:520px){.kpirow{grid-template-columns:repeat(2,1fr)}}
@@ -303,24 +308,46 @@
     </div>
 
     <div id="pormes" style="margin-top:24px">
-      <div class="loja-titulo total" style="font-size:15px;margin-bottom:14px">Por mês</div>
+      <div class="loja-titulo total" id="pormes-titulo" style="font-size:15px;margin-bottom:14px">Por mês</div>
       <div class="tablewrap" style="margin-top:0">
-        <strong style="font-family:'Hanken Grotesk';font-size:13px">Resumo dos meses</strong>
-        <div class="tscroll" style="margin-top:10px;max-height:none">
+        <strong id="pormes-tbl-titulo" style="font-family:'Hanken Grotesk';font-size:13px">Resumo dos meses</strong>
+        <div class="tscroll" id="pormes-tbl-scroll" style="margin-top:10px;max-height:none">
           <table id="pormes-tbl"></table>
         </div>
       </div>
-      <div class="tablewrap" style="margin-top:16px">
-        <div class="chart-titulo">Vendas e lucro por mês</div>
-        <div class="chart-leg"><span><span class="sw" style="background:#2a78d6"></span>Vendas</span><span><span class="sw" style="background:#1baf7a"></span>Lucro</span></div>
-        <div class="chart-box"><canvas id="g1"></canvas></div>
-
-        <div class="chart-titulo" style="margin-top:26px">Margem por mês</div>
-        <div class="chart-box" style="height:230px"><canvas id="g2"></canvas></div>
-
-        <div class="chart-titulo" style="margin-top:26px">Para onde foi a receita (cada mês)</div>
-        <div class="chart-leg"><span><span class="sw" style="background:#e34948"></span>Taxas</span><span><span class="sw" style="background:#888780"></span>Custo do produto</span><span><span class="sw" style="background:#1baf7a"></span>Lucro</span></div>
-        <div class="chart-box" style="height:280px"><canvas id="g3"></canvas></div>
+      <div style="margin-top:16px">
+        <div class="charts6">
+          <div class="chart-cell">
+            <div class="chart-head"><span class="chart-titulo" id="ct1">Vendas e lucro por mês</span>
+              <span class="chart-leg"><span><span class="sw" style="background:#2E6FB0"></span>Vendas</span><span><span class="sw" style="background:#15937A"></span>Lucro</span></span></div>
+            <div class="chart-box"><canvas id="g1"></canvas></div>
+          </div>
+          <div class="chart-cell">
+            <div class="chart-head"><span class="chart-titulo" id="ct2">Margem por mês</span>
+              <span class="chart-leg"><span><span class="sw" style="background:#0F6E5C"></span>Margem %</span></span></div>
+            <div class="chart-box"><canvas id="g2"></canvas></div>
+          </div>
+          <div class="chart-cell">
+            <div class="chart-head"><span class="chart-titulo" id="ct3">Para onde foi a receita</span>
+              <span class="chart-leg"><span><span class="sw" style="background:#C0392B"></span>Taxas</span><span><span class="sw" style="background:#8A8A82"></span>Custo</span><span><span class="sw" style="background:#15937A"></span>Lucro</span></span></div>
+            <div class="chart-box"><canvas id="g3"></canvas></div>
+          </div>
+          <div class="chart-cell">
+            <div class="chart-head"><span class="chart-titulo" id="ct4">Pedidos por mês</span>
+              <span class="chart-leg"><span><span class="sw" style="background:#6C5CE0"></span>Pedidos</span></span></div>
+            <div class="chart-box"><canvas id="g4"></canvas></div>
+          </div>
+          <div class="chart-cell">
+            <div class="chart-head"><span class="chart-titulo" id="ct5">Ticket médio por mês</span>
+              <span class="chart-leg"><span><span class="sw" style="background:#B07A12"></span>Receita ÷ pedidos</span></span></div>
+            <div class="chart-box"><canvas id="g5"></canvas></div>
+          </div>
+          <div class="chart-cell">
+            <div class="chart-head"><span class="chart-titulo" id="ct6">Concluído vs em aberto</span>
+              <span class="chart-leg"><span><span class="sw" style="background:#15937A"></span>Concluído</span><span><span class="sw" style="background:#D99A2B"></span>Em aberto</span></span></div>
+            <div class="chart-box"><canvas id="g6"></canvas></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -680,26 +707,43 @@ function renderPeriodoEMes(){
     $('periodo-topo').innerHTML='Período: <b>'+fmtBR(datas[0])+' a '+fmtBR(datas[datas.length-1])+'</b> ('+nomes.join(', ')+')';
   } else $('periodo-topo').innerHTML='';
 
-  // agrega por mês
-  const porMes={};
-  for(const r of ROWS){ const ym=r.data.slice(0,7); if(!/^\d{4}-\d{2}$/.test(ym)) continue; (porMes[ym]=porMes[ym]||[]).push(r); }
-  const md=meses.map(ym=>{
-    const rows=porMes[ym], s=sub(rows), conc=sub(rows.filter(r=>r.grupo==='Concluído')), aber=sub(rows.filter(r=>r.grupo==='Em aberto'));
-    return {ym, nome:MESES[+ym.split('-')[1]-1]+'/'+ym.split('-')[0], nomeCurto:MESES[+ym.split('-')[1]-1],
+  // agrupa por mês; se houver só 1 mês, detalha por dia
+  const porDia = meses.length<=1;
+  const validas = ROWS.filter(r=>/^\d{4}-\d{2}-\d{2}$/.test(r.data));
+  const keyOf = r => porDia ? r.data : r.data.slice(0,7);
+  const chaves=[...new Set(validas.map(keyOf))].sort();
+  const grupos={}; for(const r of validas){ const k=keyOf(r); (grupos[k]=grupos[k]||[]).push(r); }
+  const md=chaves.map(k=>{
+    const rows=grupos[k], s=sub(rows), conc=sub(rows.filter(r=>r.grupo==='Concluído')), aber=sub(rows.filter(r=>r.grupo==='Em aberto'));
+    const p=k.split('-');
+    const nome = porDia ? (p[2]+'/'+p[1]) : (MESES[+p[1]-1]+'/'+p[0]);
+    const curto = porDia ? (p[2]+'/'+p[1]) : MESES[+p[1]-1];
+    return {k, nome, nomeCurto:curto,
       rec:s.rec, tax:s.tax, ren:s.ren, luc:s.luc, conc:conc.rec, aber:aber.rec, margem:s.rec?s.luc/s.rec:0,
-      np:new Set(rows.map(r=>r.pedido)).size,
-      nc:new Set(rows.filter(r=>r.grupo==='Concluído').map(r=>r.pedido)).size,
-      na:new Set(rows.filter(r=>r.grupo==='Em aberto').map(r=>r.pedido)).size};
+      np:new Set(rows.map(r=>r.pedido)).size};
   });
 
-  // tabela-resumo (uma linha por mês, decrescente)
-  let thead='<thead><tr><th class="l">Mês</th><th>Vendas</th><th>Concluído</th><th>Em aberto</th><th>Taxas</th><th>Renda líq.</th><th>Lucro</th><th>Margem</th></tr></thead>';
+  // títulos adaptáveis (mês vs dia)
+  const suf = porDia ? 'por dia' : 'por mês';
+  $('pormes-titulo').textContent = porDia ? 'Por dia' : 'Por mês';
+  $('pormes-tbl-titulo').textContent = porDia ? 'Resumo dos dias' : 'Resumo dos meses';
+  $('ct1').textContent = 'Vendas e lucro '+suf;
+  $('ct2').textContent = 'Margem '+suf;
+  $('ct3').textContent = 'Para onde foi a receita ('+(porDia?'cada dia':'cada mês')+')';
+  $('ct4').textContent = 'Pedidos '+suf;
+  $('ct5').textContent = 'Ticket médio '+suf;
+  $('ct6').textContent = 'Concluído vs em aberto '+suf;
+  $('pormes-tbl-scroll').style.maxHeight = porDia ? '340px' : 'none';
+
+  // tabela-resumo (uma linha por período, decrescente)
+  const col1 = porDia ? 'Dia' : 'Mês';
+  let thead=`<thead><tr><th class="l">${col1}</th><th>Vendas</th><th>Concluído</th><th>Em aberto</th><th>Taxas</th><th>Renda líq.</th><th>Lucro</th><th>Margem</th></tr></thead>`;
   let tb='';
   for(let i=md.length-1;i>=0;i--){ const m=md[i];
     tb+=`<tr><td class="l">${m.nome}</td><td>${BRL(m.rec)}</td><td class="pos">${BRL(m.conc)}</td><td>${BRL(m.aber)}</td><td class="neg">${BRL(m.tax)}</td><td>${BRL(m.ren)}</td><td class="${m.luc>=0?'pos':'neg'}">${BRL(m.luc)}</td><td class="${m.margem>=0?'pos':'neg'}">${PCT(m.margem)}</td></tr>`;
   }
   // linha total
-  const tt=sub(ROWS);
+  const tt=sub(validas);
   tb+=`<tr style="border-top:2px solid var(--ink);font-weight:700"><td class="l"><b>Total</b></td><td><b>${BRL(tt.rec)}</b></td><td class="pos"><b>${BRL(md.reduce((a,m)=>a+m.conc,0))}</b></td><td><b>${BRL(md.reduce((a,m)=>a+m.aber,0))}</b></td><td class="neg"><b>${BRL(tt.tax)}</b></td><td><b>${BRL(tt.ren)}</b></td><td class="${tt.luc>=0?'pos':'neg'}"><b>${BRL(tt.luc)}</b></td><td class="${tt.luc>=0?'pos':'neg'}"><b>${PCT(tt.rec?tt.luc/tt.rec:0)}</b></td></tr>`;
   $('pormes-tbl').innerHTML=thead+'<tbody>'+tb+'</tbody>';
 
@@ -712,48 +756,97 @@ function desenharGraficos(md){
   for(const k in CHARTS){ try{CHARTS[k].destroy();}catch(e){} }
   CHARTS={};
   try{ if(window.ChartDataLabels && !Chart.registry.plugins.get('datalabels')) Chart.register(ChartDataLabels); }catch(e){}
+  try{
+    Chart.defaults.font.family="'Hanken Grotesk','Inter',sans-serif";
+    Chart.defaults.plugins.tooltip.backgroundColor='#14201E';
+    Chart.defaults.plugins.tooltip.padding=10;
+    Chart.defaults.plugins.tooltip.cornerRadius=8;
+    Chart.defaults.plugins.tooltip.titleFont={size:12,weight:'600'};
+    Chart.defaults.plugins.tooltip.bodyFont={size:12};
+    Chart.defaults.plugins.tooltip.displayColors=false;
+  }catch(e){}
   const cs=getComputedStyle(document.documentElement);
   const ink=(cs.getPropertyValue('--ink')||'#14201E').trim();
   const mut=(cs.getPropertyValue('--muted')||'#5C6B68').trim();
-  const grid='rgba(120,120,120,0.15)';
+  const grid='rgba(20,32,30,0.06)';
   const labels=md.map(m=>m.nomeCurto.charAt(0).toUpperCase()+m.nomeCurto.slice(1));
   const kbrl=v=>'R$ '+(v/1000).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'k';
   const custoMes=md.map(m=>Math.max(0,m.ren-m.luc));
+  const showLabels = md.length<=12;            // muitos dias: sem rótulos em cima (vê no tooltip)
+  const xtick = {color:mut, autoSkip:true, maxRotation:0, maxTicksLimit: md.length>12?12:24};
+  // poucos períodos: estreita e centraliza os gráficos pra não ficar espaçado demais
+  const maxw = md.length<=8 ? Math.min(560, md.length*70+100) : 0;
+  document.querySelectorAll('#pormes .chart-box').forEach(function(b){
+    if(maxw){ b.style.maxWidth=maxw+'px'; b.style.marginLeft='auto'; b.style.marginRight='auto'; }
+    else { b.style.maxWidth='none'; b.style.marginLeft=''; b.style.marginRight=''; }
+  });
 
   CHARTS.g1=new Chart($('g1'),{type:'bar',
     data:{labels,datasets:[
-      {label:'Vendas',data:md.map(m=>m.rec),backgroundColor:'#2a78d6',borderRadius:4,maxBarThickness:46},
-      {label:'Lucro',data:md.map(m=>m.luc),backgroundColor:'#1baf7a',borderRadius:4,maxBarThickness:46}]},
+      {label:'Vendas',data:md.map(m=>m.rec),backgroundColor:'#2E6FB0',borderRadius:4,maxBarThickness:46},
+      {label:'Lucro',data:md.map(m=>m.luc),backgroundColor:'#15937A',borderRadius:4,maxBarThickness:46}]},
     options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:22}},
       plugins:{legend:{display:false},
-        datalabels:{anchor:'end',align:'end',offset:2,color:ink,font:{size:10,weight:'500'},formatter:kbrl},
+        datalabels:{display:showLabels,anchor:'end',align:'end',offset:2,color:ink,font:{size:10,weight:'500'},formatter:kbrl},
         tooltip:{callbacks:{label:c=>c.dataset.label+': '+BRL(c.parsed.y)}}},
-      scales:{x:{grid:{display:false},ticks:{color:mut}},
-        y:{grid:{color:grid},ticks:{color:mut,callback:v=>'R$ '+(v/1000)+'k'}}}}});
+      scales:{x:{grid:{display:false},border:{display:false},ticks:xtick},
+        y:{border:{display:false},grid:{color:grid},ticks:{color:mut,callback:v=>'R$ '+(v/1000)+'k'}}}}});
 
   CHARTS.g2=new Chart($('g2'),{type:'line',
     data:{labels,datasets:[{label:'Margem',data:md.map(m=>+(m.margem*100).toFixed(1)),borderColor:'#0F6E5C',
-      borderWidth:2,pointRadius:5,pointBackgroundColor:'#0F6E5C',tension:0.25,fill:false}]},
-    options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:24,right:12}},
+      borderWidth:2,pointRadius:showLabels?5:3,pointBackgroundColor:'#0F6E5C',tension:0.25,fill:false}]},
+    options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:24,right:14,left:8}},
       plugins:{legend:{display:false},
-        datalabels:{anchor:'end',align:'top',offset:4,color:ink,font:{size:11,weight:'500'},
+        datalabels:{display:showLabels,anchor:'end',align:'top',offset:4,color:ink,font:{size:11,weight:'500'},
           formatter:v=>v.toLocaleString('pt-BR',{minimumFractionDigits:1})+'%'},
         tooltip:{callbacks:{label:c=>'Margem: '+c.parsed.y+'%'}}},
-      scales:{x:{grid:{display:false},ticks:{color:mut}},
-        y:{grid:{color:grid},ticks:{color:mut,callback:v=>v+'%'},suggestedMin:0}}}});
+      scales:{x:{grid:{display:false},border:{display:false},ticks:xtick},
+        y:{border:{display:false},grid:{color:grid},ticks:{color:mut,callback:v=>v+'%'},suggestedMin:0}}}});
 
   CHARTS.g3=new Chart($('g3'),{type:'bar',
     data:{labels,datasets:[
-      {label:'Taxas',data:md.map(m=>m.tax),backgroundColor:'#e34948',maxBarThickness:60},
-      {label:'Custo do produto',data:custoMes,backgroundColor:'#888780',maxBarThickness:60},
-      {label:'Lucro',data:md.map(m=>m.luc),backgroundColor:'#1baf7a',maxBarThickness:60}]},
+      {label:'Taxas',data:md.map(m=>m.tax),backgroundColor:'#C0392B',maxBarThickness:60},
+      {label:'Custo do produto',data:custoMes,backgroundColor:'#8A8A82',maxBarThickness:60},
+      {label:'Lucro',data:md.map(m=>m.luc),backgroundColor:'#15937A',maxBarThickness:60}]},
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false},
         datalabels:{color:'#fff',font:{size:10,weight:'500'},formatter:kbrl,
-          display:c=>c.dataset.data[c.dataIndex]>(md.reduce((a,m)=>a+m.rec,0)/md.length)*0.06},
+          display:c=>showLabels && c.dataset.data[c.dataIndex]>(md.reduce((a,m)=>a+m.rec,0)/md.length)*0.06},
         tooltip:{callbacks:{label:c=>c.dataset.label+': '+BRL(c.parsed.y)}}},
-      scales:{x:{stacked:true,grid:{display:false},ticks:{color:mut}},
-        y:{stacked:true,grid:{color:grid},ticks:{color:mut,callback:v=>'R$ '+(v/1000)+'k'}}}}});
+      scales:{x:{stacked:true,grid:{display:false},border:{display:false},ticks:xtick},
+        y:{stacked:true,border:{display:false},grid:{color:grid},ticks:{color:mut,callback:v=>'R$ '+(v/1000)+'k'}}}}});
+
+  CHARTS.g4=new Chart($('g4'),{type:'bar',
+    data:{labels,datasets:[{label:'Pedidos',data:md.map(m=>m.np),backgroundColor:'#6C5CE0',borderRadius:4,maxBarThickness:46}]},
+    options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:22}},
+      plugins:{legend:{display:false},
+        datalabels:{display:showLabels,anchor:'end',align:'end',offset:2,color:ink,font:{size:10,weight:'500'},formatter:v=>v},
+        tooltip:{callbacks:{label:c=>c.parsed.y+' pedidos'}}},
+      scales:{x:{grid:{display:false},border:{display:false},ticks:xtick},
+        y:{border:{display:false},grid:{color:grid},ticks:{color:mut,precision:0}}}}});
+
+  CHARTS.g5=new Chart($('g5'),{type:'line',
+    data:{labels,datasets:[{label:'Ticket médio',data:md.map(m=>m.np?+(m.rec/m.np).toFixed(2):0),borderColor:'#B07A12',
+      borderWidth:2,pointRadius:showLabels?5:3,pointBackgroundColor:'#B07A12',tension:0.25,fill:false}]},
+    options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:24,right:14,left:8}},
+      plugins:{legend:{display:false},
+        datalabels:{display:showLabels,anchor:'end',align:'top',offset:4,color:ink,font:{size:11,weight:'500'},
+          formatter:v=>'R$ '+Math.round(v)},
+        tooltip:{callbacks:{label:c=>'Ticket médio: '+BRL(c.parsed.y)}}},
+      scales:{x:{grid:{display:false},border:{display:false},ticks:xtick},
+        y:{border:{display:false},grid:{color:grid},ticks:{color:mut,callback:v=>'R$ '+Math.round(v)},suggestedMin:0}}}});
+
+  CHARTS.g6=new Chart($('g6'),{type:'bar',
+    data:{labels,datasets:[
+      {label:'Concluído',data:md.map(m=>m.conc),backgroundColor:'#15937A',maxBarThickness:46},
+      {label:'Em aberto',data:md.map(m=>m.aber),backgroundColor:'#D99A2B',maxBarThickness:46}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},
+        datalabels:{color:'#fff',font:{size:10,weight:'500'},formatter:kbrl,
+          display:c=>showLabels && c.dataset.data[c.dataIndex]>(md.reduce((a,m)=>a+m.rec,0)/md.length)*0.06},
+        tooltip:{callbacks:{label:c=>c.dataset.label+': '+BRL(c.parsed.y)}}},
+      scales:{x:{stacked:true,grid:{display:false},border:{display:false},ticks:xtick},
+        y:{stacked:true,border:{display:false},grid:{color:grid},ticks:{color:mut,callback:v=>'R$ '+(v/1000)+'k'}}}}});
 }
 function renderTable(){
   const q=norm($('search').value);

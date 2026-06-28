@@ -556,7 +556,6 @@ async function handleFilesView(list){
 // ===== SUBIR AO HISTÓRICO (grava na nuvem, com regras) =====
 async function handleFilesHistorico(list){
   $('err').classList.add('hidden');
-  if(!confirm('⚠️ Você vai ADICIONAR ao histórico permanente na nuvem.\n\n• Já conferiu se a planilha está certa (mês correto, sem duplicar)?\n• Só são aceitos meses JÁ FECHADOS.\n• Meses que já existem no histórico serão pulados.\n\nDeseja continuar?')) return;
   const hoje=new Date(); const ymHoje=hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0');
   let inseridos=0, msgs=[];
   for(const f of list){
@@ -1208,7 +1207,6 @@ function exportar(){
 // ---------- eventos ----------
 const drop=$('drop');
 drop.addEventListener('click',(e)=>{ if(e.target.closest('button')) return; $('file').click(); });
-$('file').addEventListener('change',e=>{ const fl=Array.from(e.target.files); e.target.value=''; handleFilesView(fl); });
 ['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over');}));
 ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over');}));
 drop.addEventListener('drop',e=>handleFilesView(Array.from(e.dataTransfer.files)));
@@ -1216,10 +1214,16 @@ $('search').addEventListener('input',renderTable);
 $('alvo').addEventListener('input',renderAll);
 $('despesa').addEventListener('input',function(){ try{localStorage.setItem('tokhome_despesa',$('despesa').value);}catch(e){} if(ORDERS) renderAll(); });
 $('btn-export').addEventListener('click',exportar);
-$('btn-reset').addEventListener('click',()=>$('file').click());        // Visualizar arquivos (temporário)
-$('btn-hist').addEventListener('click',()=>$('file-hist').click());    // Subir ao histórico
-$('btn-hist0').addEventListener('click',()=>$('file-hist').click());
-$('file-hist').addEventListener('change',e=>{ const fl=Array.from(e.target.files); e.target.value=''; handleFilesHistorico(fl); });
+function abrirVisualizar(e){ if(e) e.stopPropagation(); $('file').click(); }
+function abrirHistorico(e){ if(e) e.stopPropagation();
+  if(!confirm('⚠️ SUBIR AO HISTÓRICO PERMANENTE (nuvem)\n\n• Já conferiu se a planilha está certa (mês certo, sem duplicar)?\n• Só são aceitos meses JÁ FECHADOS.\n• Meses que já existem serão pulados.\n\nDeseja escolher os arquivos agora?')) return;
+  $('file-hist').click();
+}
+$('btn-reset').addEventListener('click',abrirVisualizar);   // Visualizar (temporário)
+$('btn-hist').addEventListener('click',abrirHistorico);     // Subir ao histórico (nuvem)
+$('btn-hist0').addEventListener('click',abrirHistorico);
+$('file').addEventListener('change',e=>{ const fl=Array.from(e.target.files); e.target.value=''; if(fl.length) handleFilesView(fl); });
+$('file-hist').addEventListener('change',e=>{ const fl=Array.from(e.target.files); e.target.value=''; if(fl.length) handleFilesHistorico(fl); });
 $('filtros').addEventListener('click',e=>{
   const b=e.target.closest('button'); if(!b) return;
   const ac=b.dataset.acao;

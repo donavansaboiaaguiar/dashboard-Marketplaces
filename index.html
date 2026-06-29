@@ -161,6 +161,23 @@
     background:var(--field);border-radius:8px;padding:8px 11px;outline:none}
   input:focus{border-color:var(--pos);background:#fff}
   .tscroll{overflow:auto;max-height:460px;border:1px solid var(--line-soft);border-radius:10px}
+  /* comparativo Tok vs Magic por canal */
+  #comparativo .cmp-wrap{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px}
+  @media(max-width:820px){#comparativo .cmp-wrap{grid-template-columns:1fr}}
+  .cmp-block{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:var(--field)}
+  .cmp-titulo{font-family:'Hanken Grotesk',sans-serif;font-weight:700;font-size:13px;margin-bottom:6px}
+  .cmp-row{display:grid;grid-template-columns:1.25fr repeat(var(--n),1fr);gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line-soft)}
+  .cmp-row:last-child{border-bottom:none}
+  .cmp-head{border-bottom:1px solid var(--line)}
+  .cmp-head .cmp-cell{font-family:'Hanken Grotesk',sans-serif;font-weight:700;color:var(--ink);font-size:13px}
+  .cmp-lbl{font-size:11.5px;color:var(--muted);font-weight:600}
+  .cmp-cell{font-family:'JetBrains Mono',monospace;font-size:12.5px;text-align:right;font-weight:600;line-height:1.25}
+  .cmp-cell small{display:block;font-size:9.5px;color:var(--muted);font-weight:500;margin-top:1px}
+  .cmp-cell.win{color:var(--pos)}
+  .cmp-cell.win small{color:var(--pos)}
+  .cmp-cell.neg{color:var(--neg)}
+  .cmp-foot{font-size:11px;color:var(--muted);margin-top:10px;line-height:1.5}
+  .cmp-foot b{color:var(--ink)}
   table{width:100%;border-collapse:collapse;font-size:12.5px}
   th{position:sticky;top:0;background:var(--ink);color:#fff;font-family:'Hanken Grotesk';font-weight:600;
     font-size:11px;text-align:right;padding:9px 10px;white-space:nowrap;cursor:pointer;user-select:none}
@@ -322,6 +339,8 @@
     </div>
 
     <div id="kpis"></div>
+
+    <div id="comparativo" class="hidden" style="margin-top:18px"></div>
 
     <div id="resumo-meses" class="tablewrap" style="margin-top:18px">
       <strong id="pormes-tbl-titulo" style="font-family:'Hanken Grotesk';font-size:13px">Resumo dos meses</strong>
@@ -668,6 +687,13 @@ async function histSave(){ try{ const db=await idbOpen(); await new Promise((res
 async function histLoad(){ try{ const db=await idbOpen(); return await new Promise((res)=>{ const r=db.transaction('store').objectStore('store').get('all'); r.onsuccess=()=>res(r.result||null); r.onerror=()=>res(null); }); }catch(e){ return null; } }
 async function histClear(){ try{ const db=await idbOpen(); await new Promise((res)=>{ const tx=db.transaction('store','readwrite'); tx.objectStore('store').delete('all'); tx.oncomplete=res; tx.onerror=res; }); }catch(e){} }
 function mesDeOrder(r){ return (fmtDate(r.data)||'').slice(0,7); }
+// receita paga (concluído + em aberto) somando 1x por pedido — usada p/ ratear o custo fixo
+function receitaPaga(orders){
+  const seen={}; let t=0;
+  for(const r of orders){ const st=(r.status||'').trim(); if(st==='Cancelado'||st==='Não pago') continue;
+    const key=(r._loja||'')+'||'+r.pedido; if(seen[key]) continue; seen[key]=1; t+=(r.receita||0); }
+  return t;
+}
 function ajustarCards(){
   document.querySelectorAll('#kpis .kpi .val').forEach(el=>{
     el.style.fontSize=''; let fs=18, guard=0;
@@ -856,7 +882,13 @@ function renderAll(){
   // imposto por CNPJ usa aliqDe/impostoDe (definidos no módulo)
   // despesa fixa: R$ x por mês, descontada no total (rateada por receita nas lojas)
   const mesesU=[...new Set(ROWS.map(r=>r.data.slice(0,7)).filter(x=>/^\d{4}-\d{2}$/.test(x)))].sort();
-  const nMeses=mesesU.length||1;
+  // Base para ratear o custo fixo: receita de TODAS as lojas nos meses selecionados.
+  // Assim, ao filtrar uma loja sozinha, ela leva só a fatia proporcional do custo fixo
+  // (e não os R$ 150 mil cheios) — fica igual ao que aparece na visão geral.
+  const baseOrders = ORDERS_ALL.filter(r=> !FILTRO_MESES || FILTRO_MESES.has(mesDeOrder(r)));
+  const mesesBase=[...new Set(baseOrders.map(mesDeOrder).filter(x=>/^\d{4}-\d{2}$/.test(x)))];
+  const nMeses=mesesBase.length||mesesU.length||1;
+  const baseRevTotal=receitaPaga(baseOrders)||T.rec||1;
   const despesaFixa=Math.max(0,+$('despesa').value||0);
   const despesaTotal=despesaFixa*nMeses;
   let blocos='';
@@ -866,11 +898,11 @@ function renderAll(){
   for(const L of lojasOrd){
     const rows=ROWS.filter(r=>(r.loja||'—')===L);
     const s=sub(rows), mg=s.rec?s.luc/s.rec:0;
-    const despLoja = T.rec>0 ? despesaTotal*(s.rec/T.rec) : 0;
+    const despLoja = despesaTotal*(s.rec/baseRevTotal);
     blocos+=`<div class="loja-bloco"><div class="loja-titulo">${L} <span class="lt-tot">${perLabel(rows)} · ${BRL(s.rec)} · margem ${PCT(mg)}</span></div><div class="kpirow">${cardsLoja(rows,despLoja)}</div></div>`;
   }
   if(lojasOrd.length>1){
-    blocos=`<div class="loja-bloco"><div class="loja-titulo total">Total · todas as lojas <span class="lt-tot">${perLabel(ROWS)} · ${BRL(T.rec)} · margem ${PCT(margem)}</span></div><div class="kpirow">${cardsLoja(ROWS,despesaTotal)}</div></div>`+blocos;
+    blocos=`<div class="loja-bloco"><div class="loja-titulo total">Total · todas as lojas <span class="lt-tot">${perLabel(ROWS)} · ${BRL(T.rec)} · margem ${PCT(margem)}</span></div><div class="kpirow">${cardsLoja(ROWS,despesaTotal*(T.rec/baseRevTotal))}</div></div>`+blocos;
   }
   $('kpis').innerHTML=blocos;
   requestAnimationFrame(ajustarCards);
@@ -918,7 +950,58 @@ function renderAll(){
       ${li(sc,x=>`<li><span>${x.k}</span><span>${BRL(x.rec)}</span></li>`)}</ul></div>`;
 
   renderPeriodoEMes();
+  renderComparativo();
   renderTable();
+}
+
+// Comparativo Tok vs Magic dentro de cada canal (só no Modo histórico)
+function renderComparativo(){
+  const box=$('comparativo'); if(!box) return;
+  if(!MODO_HIST){ box.classList.add('hidden'); box.innerHTML=''; return; }
+  // agrega por loja
+  const agg={};
+  for(const r of ROWS){ const L=r.loja||'—';
+    const m=(agg[L]=agg[L]||{rec:0,tax:0,luc:0,ped:new Set(),conc:new Set()});
+    m.rec+=r.receita; m.tax+=r.taxas; m.luc+=r.lucro; m.ped.add(r.pedido);
+    if(r.grupo==='Concluído') m.conc.add(r.pedido); }
+  // separa "Canal · CNPJ"
+  const split=L=>{ const i=L.indexOf('·'); return i<0?{canal:L.trim(),cnpj:'—'}:{canal:L.slice(0,i).trim(),cnpj:L.slice(i+1).trim()}; };
+  const canais={};
+  for(const L in agg){ const {canal,cnpj}=split(L); (canais[canal]=canais[canal]||{})[cnpj]=agg[L]; }
+  // só monta bloco onde há 2+ CNPJs pra comparar
+  const ordem=Object.keys(canais).sort();
+  let blocos='';
+  for(const canal of ordem){
+    const cnpjs=Object.keys(canais[canal]).sort();
+    if(cnpjs.length<2) continue;
+    const col=c=>{ const m=canais[canal][c]; const np=m.ped.size||0; return {c,
+      rec:m.rec, margem:m.rec?m.luc/m.rec:0, ticket:np?m.rec/np:0,
+      taxasP:m.rec?m.tax/m.rec:0, ped:np, conclP:np?m.conc.size/np:0}; };
+    const cols=cnpjs.map(col);
+    const totCanal=cols.reduce((a,x)=>a+x.rec,0)||1;
+    const best=(key,maior)=>{ let bi=-1,bv=null; cols.forEach((x,i)=>{ if(bv===null||(maior?x[key]>bv:x[key]<bv)){bv=x[key];bi=i;} }); return bi; };
+    const linhas=[
+      {lbl:'Faturamento', f:x=>BRL(x.rec), sub:x=>PCT(x.rec/totCanal)+' do canal', b:best('rec',true)},
+      {lbl:'Margem real', f:x=>PCT(x.margem), b:best('margem',true), neg:x=>x.margem<0},
+      {lbl:'Ticket médio', f:x=>BRL(x.ticket), b:best('ticket',true)},
+      {lbl:'Taxas ÷ receita', f:x=>PCT(x.taxasP), b:best('taxasP',false)},
+      {lbl:'Pedidos', f:x=>x.ped.toLocaleString('pt-BR'), b:best('ped',true)},
+      {lbl:'% concluído', f:x=>PCT(x.conclP), b:best('conclP',true)},
+    ];
+    const head=`<div class="cmp-row cmp-head"><div class="cmp-lbl"></div>${cols.map(x=>`<div class="cmp-cell">${x.c}</div>`).join('')}</div>`;
+    const corpo=linhas.map(rw=>`<div class="cmp-row"><div class="cmp-lbl">${rw.lbl}</div>${cols.map((x,i)=>{
+      const win=(i===rw.b)?'win':''; const neg=(rw.neg&&rw.neg(x))?'neg':'';
+      return `<div class="cmp-cell ${win} ${neg}">${rw.f(x)}${rw.sub?`<small>${rw.sub(x)}</small>`:''}</div>`;
+    }).join('')}</div>`).join('');
+    // vencedor pela margem real (o que mais importa)
+    const im=best('margem',true); const venc=cols[im];
+    blocos+=`<div class="cmp-block"><div class="cmp-titulo">${canal} · ${cnpjs.join(' vs ')}</div>`
+      +`<div class="cmp-grid" style="--n:${cols.length}">${head}${corpo}</div>`
+      +`<div class="cmp-foot">Melhor margem real no ${canal}: <b>${venc.c}</b> (${PCT(venc.margem)}). Verde = melhor da linha.</div></div>`;
+  }
+  if(!blocos){ box.classList.add('hidden'); box.innerHTML=''; return; }
+  box.classList.remove('hidden');
+  box.innerHTML=`<div class="panel"><h3>Comparativo por loja <span class="hint">Tok vs Magic em cada canal · margem sem custo fixo · segue o filtro de meses</span></h3><div class="cmp-wrap">${blocos}</div></div>`;
 }
 
 const MESES=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
@@ -972,19 +1055,24 @@ function renderPeriodoEMes(){
   // tabela-resumo (uma linha por período, decrescente) — segue o filtro do topo
   const col1 = porDia ? 'Dia' : 'Mês';
   const despesaFixa=Math.max(0,+$('despesa').value||0);
+  // base p/ ratear o custo fixo: receita de TODAS as lojas em cada mês (ignora o filtro de loja)
+  const baseRevByMonth={};
+  { const byM={}; for(const r of ORDERS_ALL){ const mo=mesDeOrder(r); if(!/^\d{4}-\d{2}$/.test(mo)) continue; (byM[mo]=byM[mo]||[]).push(r); }
+    for(const mo in byM) baseRevByMonth[mo]=receitaPaga(byM[mo]); }
   const totalRecMd = md.reduce((a,m)=>a+m.rec,0);
-  // despesa por linha: por mês = despesa cheia; por dia = rateada por receita dentro do mês
-  const despDe = (m)=> porDia ? (totalRecMd? despesaFixa*(m.rec/totalRecMd):0) : despesaFixa;
+  // custo fixo da linha = R$ fixo do mês × (receita da seleção ÷ receita de todas as lojas naquele mês)
+  const despDe = (m)=>{ const mo=(m.k||'').slice(0,7); const base=baseRevByMonth[mo]||0;
+    if(base>0) return despesaFixa*(m.rec/base);
+    return porDia ? (totalRecMd?despesaFixa*(m.rec/totalRecMd):0) : despesaFixa; };
   let thead=`<thead><tr><th class="l">${col1}</th><th>Vendas</th><th>Concluído</th><th>Em aberto</th><th>Taxas</th><th>Custo fixo</th><th>Renda líq.</th><th>Margem</th><th>Margem %</th></tr></thead>`;
-  let tb='';
-  for(let i=md.length-1;i>=0;i--){ const m=md[i]; const d=despDe(m);
+  let tb='', despT=0;
+  for(let i=md.length-1;i>=0;i--){ const m=md[i]; const d=despDe(m); despT+=d;
     const msp=m.ren-d;   // margem = Vendas − Taxas − Custo fixo
     const spb=m.rec?msp/m.rec:0;
     tb+=`<tr><td class="l">${m.nome}</td><td>${BRL(m.rec)}</td><td class="pos">${BRL(m.conc)}</td><td>${BRL(m.aber)}</td><td class="neg">${BRL(m.tax)}</td><td class="neg">${BRL(d)}</td><td>${BRL(m.ren)}</td><td class="${msp>=0?'pos':'neg'}">${BRL(msp)}</td><td class="${spb>=0?'pos':'neg'}">${PCT(spb)}</td></tr>`;
   }
   // linha total
   const tt=sub(validas);
-  const despT=porDia?despesaFixa:despesaFixa*md.length;
   const mspT=tt.ren-despT;
   const spbT=tt.rec?mspT/tt.rec:0;
   tb+=`<tr style="border-top:2px solid var(--ink);font-weight:700"><td class="l"><b>Total</b></td><td><b>${BRL(tt.rec)}</b></td><td class="pos"><b>${BRL(md.reduce((a,m)=>a+m.conc,0))}</b></td><td><b>${BRL(md.reduce((a,m)=>a+m.aber,0))}</b></td><td class="neg"><b>${BRL(tt.tax)}</b></td><td class="neg"><b>${BRL(despT)}</b></td><td><b>${BRL(tt.ren)}</b></td><td class="${mspT>=0?'pos':'neg'}"><b>${BRL(mspT)}</b></td><td class="${spbT>=0?'pos':'neg'}"><b>${PCT(spbT)}</b></td></tr>`;

@@ -178,6 +178,45 @@
   .cmp-cell.neg{color:var(--neg)}
   .cmp-foot{font-size:11px;color:var(--muted);margin-top:10px;line-height:1.5}
   .cmp-foot b{color:var(--ink)}
+  @media print{
+    @page{ size:A4 landscape; margin:9mm; }
+    *{ -webkit-print-color-adjust:exact!important; print-color-adjust:exact!important; }
+    body{ background:#fff!important; padding:0!important; }
+    /* tira tudo que é "ferramenta" e não conteúdo */
+    #gate, #sidebar, .bar-actions, .despesa-bar, .custos-bar, #custos-panel,
+    #drop, #detalhe-pedidos, #view-aviso, header .sub, .no-print{ display:none!important; }
+    .wrap{ max-width:none!important; width:100%!important; margin:0!important; padding:0!important; }
+    header{ margin-bottom:8px!important; }
+    /* topo "Vendas do período": esconde legenda/parágrafo (já aparece nos cards) */
+    #splitnote{ display:none!important }
+    #split-panel{ padding:11px 14px!important }
+    .panel{ padding:12px 14px!important }
+    /* mantém os blocos de KPI juntos e compactos */
+    #kpis{ gap:7px!important; margin-top:10px!important; break-inside:avoid; page-break-inside:avoid }
+    .loja-titulo{ font-size:12px!important; margin-bottom:4px!important }
+    /* cards de KPI: os 7 numa linha só, baixos e sem cortar os valores */
+    .kpirow{ grid-template-columns:repeat(7,1fr)!important; gap:7px!important; }
+    .kpi{ overflow:visible!important; padding:7px 9px!important; }
+    .kpi .val{ font-size:13px!important; margin-top:2px!important; overflow:visible!important; white-space:nowrap!important; letter-spacing:-.04em!important; }
+    .kpi .lbl{ font-size:8.5px!important; letter-spacing:.02em!important }
+    .kpi .small{ font-size:8px!important; margin-top:1px!important }
+    /* tabelas: mostrar inteiras, sem rolagem nem corte */
+    .tscroll{ overflow:visible!important; max-height:none!important; border:none!important }
+    table{ font-size:9.5px!important; width:100%!important }
+    th,td{ padding:4px 6px!important }
+    th{ position:static!important }
+    /* comparativo e gráficos */
+    .cmp-wrap{ grid-template-columns:1fr 1fr!important }
+    .cmp-cell{ font-size:10px!important }
+    .cmp-lbl{ font-size:9.5px!important }
+    .charts6{ grid-template-columns:1fr 1fr!important }
+    canvas{ max-width:100%!important }
+    /* não cortar cards/painéis/blocos no meio da página */
+    .panel, .loja-bloco, .cmp-block, .tablewrap, .chart-cell,
+    #resumo-meses, #split-panel{ break-inside:avoid; page-break-inside:avoid }
+    .cols{ display:block!important }
+    .cols>*{ margin-bottom:12px }
+  }
   table{width:100%;border-collapse:collapse;font-size:12.5px}
   th{position:sticky;top:0;background:var(--ink);color:#fff;font-family:'Hanken Grotesk';font-weight:600;
     font-size:11px;text-align:right;padding:9px 10px;white-space:nowrap;cursor:pointer;user-select:none}
@@ -316,6 +355,7 @@
       </div>
       <div>
         <button id="btn-export" class="primary">Baixar Excel</button>
+        <button id="btn-pdf">Baixar PDF</button>
         <button id="btn-hist">Subir ao histórico do mês</button>
       </div>
     </div>
@@ -406,7 +446,7 @@
       </div>
     </div>
 
-    <div class="tablewrap" style="margin-top:24px">
+    <div class="tablewrap" id="detalhe-pedidos" style="margin-top:24px">
       <div class="toolbar">
         <strong style="font-family:'Hanken Grotesk';font-size:14px">Vendas por pedido</strong>
         <input type="search" id="search" placeholder="Buscar SKU ou produto…" style="margin-left:auto;min-width:230px">
@@ -1338,6 +1378,16 @@ $('search').addEventListener('input',renderTable);
 $('alvo').addEventListener('input',renderAll);
 $('despesa').addEventListener('input',function(){ try{localStorage.setItem('tokhome_despesa',$('despesa').value);}catch(e){} if(ORDERS) renderAll(); });
 $('btn-export').addEventListener('click',exportar);
+// ---- Baixar PDF (usa a impressão do navegador → "Salvar como PDF") ----
+function baixarPDF(){
+  try{ for(const k in CHARTS){ if(CHARTS[k]&&CHARTS[k].resize) CHARTS[k].resize(); } }catch(e){}
+  const titAntigo=document.title;
+  const per=(($('periodo-topo')||{}).textContent||'').replace('Período:','').trim();
+  document.title='Dashboard Tok Home'+(per?' · '+per.split('(')[0].trim():'');
+  setTimeout(()=>{ window.print(); setTimeout(()=>{document.title=titAntigo;},500); },60);
+}
+$('btn-pdf').addEventListener('click',baixarPDF);
+window.addEventListener('beforeprint',()=>{ try{ for(const k in CHARTS){ if(CHARTS[k]&&CHARTS[k].resize) CHARTS[k].resize(); } }catch(e){} });
 function abrirVisualizar(e){ if(e) e.stopPropagation(); $('file').click(); }
 function abrirHistorico(e){ if(e) e.stopPropagation();
   if(!confirm('⚠️ SUBIR AO HISTÓRICO PERMANENTE (nuvem)\n\n• Já conferiu se a planilha está certa (mês certo, sem duplicar)?\n• Só são aceitos meses JÁ FECHADOS.\n• Meses que já existem serão pulados.\n\nDeseja escolher os arquivos agora?')) return;
